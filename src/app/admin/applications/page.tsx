@@ -154,11 +154,14 @@ export default function AdminApplicationsPage() {
             >
               <option value="ALL">All Application Statuses</option>
               <option value="Applied">Applied</option>
-              <option value="Under Review">Under Review</option>
               <option value="Shortlisted">Shortlisted</option>
-              <option value="Interview Scheduled">Interview Scheduled</option>
+              <option value="Aptitude">Aptitude</option>
+              <option value="Technical Interview">Technical Interview</option>
+              <option value="HR Interview">HR Interview</option>
               <option value="Selected">Selected</option>
               <option value="Rejected">Rejected</option>
+              <option value="Under Review">Under Review</option>
+              <option value="Interview Scheduled">Interview Scheduled</option>
             </select>
           </div>
         </div>
@@ -216,22 +219,25 @@ export default function AdminApplicationsPage() {
                       </td>
 
                       <td className="py-3 px-4">
-                        <Badge
-                          variant={
-                            app.status === "Selected"
-                              ? "success"
-                              : app.status === "Interview Scheduled"
-                              ? "purple"
-                              : app.status === "Shortlisted"
-                              ? "info"
-                              : app.status === "Rejected"
-                              ? "destructive"
-                              : "secondary"
-                          }
-                          className="text-[10px]"
-                        >
-                          {app.status}
-                        </Badge>
+                        {app.status === "Selected" ? (
+                          <Badge variant="success" className="text-[10px]">Selected</Badge>
+                        ) : app.status === "Shortlisted" ? (
+                          <Badge variant="info" className="text-[10px]">Shortlisted</Badge>
+                        ) : app.status === "Aptitude" ? (
+                          <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[10px]">Aptitude</Badge>
+                        ) : app.status === "Technical Interview" ? (
+                          <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px]">Technical Round</Badge>
+                        ) : app.status === "HR Interview" ? (
+                          <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 text-[10px]">HR Interview</Badge>
+                        ) : app.status === "Rejected" ? (
+                          <Badge variant="destructive" className="text-[10px]">Rejected</Badge>
+                        ) : app.status === "Interview Scheduled" ? (
+                          <Badge variant="purple" className="text-[10px]">Interview Scheduled</Badge>
+                        ) : app.status === "Under Review" ? (
+                          <Badge variant="warning" className="text-[10px]">Under Review</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-[10px]">Applied</Badge>
+                        )}
                       </td>
 
                       <td className="py-3 px-4">
@@ -242,11 +248,14 @@ export default function AdminApplicationsPage() {
                           className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                         >
                           <option value="Applied">Applied</option>
-                          <option value="Under Review">Under Review</option>
                           <option value="Shortlisted">Shortlisted</option>
-                          <option value="Interview Scheduled">Interview Scheduled</option>
+                          <option value="Aptitude">Aptitude</option>
+                          <option value="Technical Interview">Technical Interview</option>
+                          <option value="HR Interview">HR Interview</option>
                           <option value="Selected">Selected</option>
                           <option value="Rejected">Rejected</option>
+                          <option value="Under Review">Under Review</option>
+                          <option value="Interview Scheduled">Interview Scheduled</option>
                         </select>
                       </td>
 

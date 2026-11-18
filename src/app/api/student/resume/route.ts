@@ -53,6 +53,7 @@ export async function POST(req: Request) {
       data: {
         resumeUrl: publicUrl,
         resumeName: file.name,
+        resumeUploadDate: new Date(),
       }
     });
 
@@ -60,6 +61,7 @@ export async function POST(req: Request) {
       success: true,
       resumeUrl: publicUrl,
       resumeName: file.name,
+      resumeUploadDate: new Date(),
       profile: updatedProfile
     });
   } catch (error: any) {
@@ -83,7 +85,6 @@ export async function DELETE() {
       return NextResponse.json({ error: "No resume found to delete." }, { status: 404 });
     }
 
-    // Safely remove the physical file if it starts with /uploads/resumes/
     if (profile.resumeUrl.startsWith("/uploads/resumes/")) {
       const filename = path.basename(profile.resumeUrl);
       const filePath = path.join(process.cwd(), "public", "uploads", "resumes", filename);
@@ -91,7 +92,7 @@ export async function DELETE() {
         try {
           fs.unlinkSync(filePath);
         } catch {
-          // If file is missing or in use, continue clearing DB reference
+          // ignore unlink error
         }
       }
     }
@@ -100,17 +101,18 @@ export async function DELETE() {
       where: { userId: sessionUser.id },
       data: {
         resumeUrl: null,
-        resumeName: null
+        resumeName: null,
+        resumeUploadDate: null,
       }
     });
 
     return NextResponse.json({
       success: true,
-      message: "Resume removed successfully.",
+      message: "Resume removed successfully",
       profile: updatedProfile
     });
   } catch (error: any) {
-    console.error("Resume delete error:", error);
+    console.error("Delete resume error:", error);
     return NextResponse.json({ error: "Failed to delete resume." }, { status: 500 });
   }
 }

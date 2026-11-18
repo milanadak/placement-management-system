@@ -7,9 +7,19 @@ const UpdateProfileSchema = z.object({
   name: z.string().min(2),
   phone: z.string().min(8),
   department: z.string().min(2),
+  course: z.string().optional().default("B.Tech"),
+  semester: z.coerce.number().int().min(1).max(8).optional().default(7),
   graduationYear: z.coerce.number().int(),
   cgpa: z.coerce.number().min(0).max(10),
+  tenthPercentage: z.coerce.number().min(0).max(100).optional().default(85.0),
+  twelfthPercentage: z.coerce.number().min(0).max(100).optional().default(82.0),
+  backlogs: z.coerce.number().int().min(0).optional().default(0),
   skills: z.string(),
+  softSkills: z.string().optional().default(""),
+  certifications: z.string().optional().default(""),
+  projects: z.string().optional().default("[]"),
+  internships: z.string().optional().default("[]"),
+  semesterMarks: z.string().optional().default("[]"),
   bio: z.string().optional().default(""),
 });
 
@@ -59,7 +69,25 @@ export async function PUT(req: Request) {
       );
     }
 
-    const { name, phone, department, graduationYear, cgpa, skills, bio } = result.data;
+    const {
+      name,
+      phone,
+      department,
+      course,
+      semester,
+      graduationYear,
+      cgpa,
+      tenthPercentage,
+      twelfthPercentage,
+      backlogs,
+      skills,
+      softSkills,
+      certifications,
+      projects,
+      internships,
+      semesterMarks,
+      bio
+    } = result.data;
 
     // Update user name and studentProfile
     const updatedUser = await prisma.user.update({
@@ -72,18 +100,38 @@ export async function PUT(req: Request) {
               rollNo: "TBD",
               phone,
               department,
+              course,
+              semester,
               graduationYear,
               cgpa,
+              tenthPercentage,
+              twelfthPercentage,
+              backlogs,
               skills,
+              softSkills,
+              certifications,
+              projects,
+              internships,
+              semesterMarks,
               bio,
               isProfileComplete: Boolean(phone && department && cgpa > 0)
             },
             update: {
               phone,
               department,
+              course,
+              semester,
               graduationYear,
               cgpa,
+              tenthPercentage,
+              twelfthPercentage,
+              backlogs,
               skills,
+              softSkills,
+              certifications,
+              projects,
+              internships,
+              semesterMarks,
               bio,
               isProfileComplete: Boolean(phone && department && cgpa > 0)
             }
@@ -99,8 +147,8 @@ export async function PUT(req: Request) {
       success: true,
       user: updatedUser
     });
-  } catch (error: any) {
-    console.error("Profile update error:", error);
-    return NextResponse.json({ error: "Failed to update profile." }, { status: 500 });
+  } catch (err: any) {
+    console.error("Profile update error:", err);
+    return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
   }
 }

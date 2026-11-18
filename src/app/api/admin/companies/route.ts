@@ -10,6 +10,9 @@ const CompanySchema = z.object({
   location: z.string().min(2),
   industry: z.string().min(2),
   contactEmail: z.string().email().optional().or(z.literal("")),
+  hrName: z.string().optional().default(""),
+  hrPhone: z.string().optional().default(""),
+  address: z.string().optional().default(""),
 });
 
 export async function GET() {
@@ -20,7 +23,11 @@ export async function GET() {
 
   const companies = await prisma.company.findMany({
     include: {
-      jobs: true
+      jobs: {
+        include: {
+          applications: true
+        }
+      }
     },
     orderBy: { createdAt: "desc" }
   });
@@ -41,7 +48,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: result.error.errors[0]?.message || "Invalid input" }, { status: 400 });
     }
 
-    const { name, website, description, location, industry, contactEmail } = result.data;
+    const { name, website, description, location, industry, contactEmail, hrName, hrPhone, address } = result.data;
     const slug = name.toLowerCase().replace(/[^a-z0-9]/g, "-") + "-" + Date.now();
 
     const company = await prisma.company.create({
@@ -52,7 +59,10 @@ export async function POST(req: Request) {
         description,
         location,
         industry,
-        contactEmail: contactEmail || null
+        contactEmail: contactEmail || null,
+        hrName: hrName || null,
+        hrPhone: hrPhone || null,
+        address: address || null
       }
     });
 
@@ -79,15 +89,20 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: result.error.errors[0]?.message || "Invalid input" }, { status: 400 });
     }
 
+    const { name, website, description, location, industry, contactEmail, hrName, hrPhone, address } = result.data;
+
     const company = await prisma.company.update({
       where: { id },
       data: {
-        name: result.data.name,
-        website: result.data.website || null,
-        description: result.data.description,
-        location: result.data.location,
-        industry: result.data.industry,
-        contactEmail: result.data.contactEmail || null
+        name,
+        website: website || null,
+        description,
+        location,
+        industry,
+        contactEmail: contactEmail || null,
+        hrName: hrName || null,
+        hrPhone: hrPhone || null,
+        address: address || null
       }
     });
 
@@ -107,11 +122,15 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
-    if (!id) return NextResponse.json({ error: "Missing company ID" }, { status: 400 });
+    if (!id) return NextResponse.json({ error: "Company ID is required" }, { status: 400 });
 
-    await prisma.company.delete({ where: { id } });
-    return NextResponse.json({ success: true });
+    await prisma.company.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({ success: true, message: "Company deleted successfully" });
   } catch (error: any) {
+    console.error("Delete company error:", error);
     return NextResponse.json({ error: "Failed to delete company" }, { status: 500 });
   }
 }

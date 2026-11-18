@@ -70,6 +70,12 @@ export default function StudentApplicationsPage() {
     switch (status) {
       case "Selected":
         return <Badge variant="success">Selected / Offer Extended</Badge>;
+      case "HR Interview":
+        return <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200">HR Interview</Badge>;
+      case "Technical Interview":
+        return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Technical Interview</Badge>;
+      case "Aptitude":
+        return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Aptitude Round</Badge>;
       case "Interview Scheduled":
         return <Badge variant="purple">Interview Scheduled</Badge>;
       case "Shortlisted":
@@ -85,9 +91,10 @@ export default function StudentApplicationsPage() {
 
   const stages = [
     "Applied",
-    "Under Review",
     "Shortlisted",
-    "Interview Scheduled",
+    "Aptitude",
+    "Technical Interview",
+    "HR Interview",
     "Selected"
   ];
 
@@ -131,7 +138,9 @@ export default function StudentApplicationsPage() {
       ) : (
         <div className="space-y-4">
           {applications.map((app) => {
-            const currentStageIndex = stages.indexOf(app.status);
+            let currentStageIndex = stages.indexOf(app.status);
+            if (app.status === "Under Review") currentStageIndex = 0;
+            if (app.status === "Interview Scheduled") currentStageIndex = 3;
             const isRejected = app.status === "Rejected";
             const canWithdraw = app.status === "Applied" || app.status === "Under Review";
 
@@ -190,7 +199,7 @@ export default function StudentApplicationsPage() {
                       <div className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wider">
                         Recruitment Pipeline Stage
                       </div>
-                      <div className="grid grid-cols-5 gap-2 text-center">
+                      <div className="grid grid-cols-6 gap-2 text-center">
                         {stages.map((stg, sIdx) => {
                           const isComplete = currentStageIndex >= sIdx;
                           const isCurrent = currentStageIndex === sIdx;

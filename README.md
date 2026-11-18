@@ -9,14 +9,11 @@
 
 **CampusConnect** is a comprehensive, production-grade university placement management platform designed for college placement cells, training and placement officers (TPOs), and graduating students. It replaces fragmented spreadsheets and manual screening with:
 
-1. **Automated Academic Eligibility Engine:** Automatically checks candidate criteria (minimum CGPA threshold, eligible engineering branches, graduation batch, application deadlines) before allowing application submissions.
-2. **Duplicate Prevention Guarantee:** Database composite unique constraints prevent duplicate submissions.
-3. **Smart Job Matching Algorithm (0–100%):** Computes objective candidate-job compatibility across CGPA (35%), Department (30%), Skills overlap (25%), and Batch (10%).
-4. **Placement Readiness Score (0–100):** Evaluates student profile completeness, technical skills breadth, verified resume, and academic standing with actionable improvement suggestions.
-5. **Eligibility Transparency Checklist:** Provides an itemized 4-point pass/fail breakdown on every campus drive details page.
-6. **Live Recruitment Pipeline:** Tracks student progression through *Applied* → *Under Review* → *Shortlisted* → *Interview Scheduled* → *Selected / Rejected*.
-7. **Application Withdrawal:** Allows students to safely retract pending applications prior to interview scheduling.
-8. **Administrative Executive Console:** Interactive Recharts visual analytics (branch-wise placement rates, conversion funnels, top hiring partners, monthly velocity), candidate shortlisting, interview scheduling with meet URLs, and 5 instant RFC 4180 CSV audit reports.
+1. **Student Profile & Academic Dossier (5 Tabs):** `Overview | Academics | Skills & Projects | Resume | Applications` featuring semester SGPA history, 10th/12th percentages, active backlogs, projects, internships, soft skills, certifications, and embedded in-browser PDF resume previewer.
+2. **Placement Eligibility Checker (`/admin/eligibility`):** Configurable criteria by admin (CGPA, backlogs, 10th %, 12th %, branch, batch, skills), real-time student eligibility calculation, single-student simulator with pass/fail reasons (✓/✕), entire batch eligibility metrics, preset drive selector, and downloadable eligible student lists in CSV.
+3. **Admin Executive Analytics Dashboard (`/admin/dashboard`):** 8 clickable KPI cards, 3 institutional CTC metrics (Highest, Average, Median CTC), branch/year filters, 6 interactive Recharts visualizations (Branch-wise, Pipeline Funnel, CGPA Histogram, Top Recruiters, Monthly Velocity, Year-wise Placement Comparison).
+4. **Resume Upload & Management System:** PDF/DOC/DOCX multi-format validation, 5MB size limit, embedded PDF preview, replace, download, delete, and **authorized placement administrator upload on behalf of student** directly in `/admin/students`.
+5. **Company & Campus Drive Management Hub:** Recruiter profiles with HR contact person, phone, and address; placement drive creation with vacancies, driveDate, and maxBacklogs; **"View Eligible Candidates" modal for any campus drive** with direct CSV export; and extended recruitment pipeline (`Applied → Shortlisted → Aptitude → Technical Interview → HR Interview → Selected → Rejected`).
 
 ---
 
@@ -70,7 +67,7 @@ To execute the automated unit, security, eligibility, and integration test suite
 ```bash
 npm test
 ```
-*Executes 23 tests verifying authentication, matching formulas, CGPA boundaries, file upload security, and RFC 4180 CSV escaping with 100% pass rate.*
+*Executes 36 tests verifying authentication, matching formulas, CGPA boundaries, file upload security, full placement eligibility gates, batch metrics, extended pipeline stages, and RFC 4180 CSV escaping with 100% pass rate.*
 
 ---
 

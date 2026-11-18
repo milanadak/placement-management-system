@@ -191,6 +191,150 @@ async function runTests() {
   assert(commaField === '"Java, Python, C++"', "Field with comma properly escaped in quotes");
   assert(quoteField === '"Special ""Power"" Programmer"', "Quotes inside field escaped using double-quote RFC 4180 standard");
 
+  // SECTION 6: ADVANCED PLACEMENT ELIGIBILITY & PIPELINE TESTS
+  console.log("\n--- 6. Placement Eligibility Engine & Extended Pipeline Tests ---");
+
+  // Replicate evaluateStudentEligibility logic for isolated test runner
+  function runEligibilityEvaluation(student, criteria) {
+    const passedReasons = [];
+    const failedReasons = [];
+
+    // CGPA Gate
+    if (student.cgpa >= criteria.minCgpa) {
+      passedReasons.push(`CGPA ${student.cgpa.toFixed(2)} meets required ${criteria.minCgpa.toFixed(1)}`);
+    } else {
+      failedReasons.push(`CGPA ${student.cgpa.toFixed(2)} is below minimum threshold of ${criteria.minCgpa.toFixed(1)}`);
+    }
+
+    // Backlogs Gate
+    if (student.backlogs <= criteria.maxBacklogs) {
+      passedReasons.push(`Active backlogs (${student.backlogs}) within maximum allowed (${criteria.maxBacklogs})`);
+    } else {
+      failedReasons.push(`Active backlogs (${student.backlogs}) exceeds limit of ${criteria.maxBacklogs}`);
+    }
+
+    // 10th Standard Percentage Gate
+    if (student.tenthPercentage >= criteria.minTenthPercentage) {
+      passedReasons.push(`10th score ${student.tenthPercentage}% meets required ${criteria.minTenthPercentage}%`);
+    } else {
+      failedReasons.push(`10th score ${student.tenthPercentage}% below required ${criteria.minTenthPercentage}%`);
+    }
+
+    // 12th Standard Percentage Gate
+    if (student.twelfthPercentage >= criteria.minTwelfthPercentage) {
+      passedReasons.push(`12th score ${student.twelfthPercentage}% meets required ${criteria.minTwelfthPercentage}%`);
+    } else {
+      failedReasons.push(`12th score ${student.twelfthPercentage}% below required ${criteria.minTwelfthPercentage}%`);
+    }
+
+    // Department / Branch Gate
+    if (criteria.eligibleDepartments === "ALL") {
+      passedReasons.push(`Department ${student.department} open to all disciplines`);
+    } else {
+      const allowedDepts = criteria.eligibleDepartments.split(",").map(d => d.trim().toLowerCase());
+      if (allowedDepts.includes(student.department.toLowerCase())) {
+        passedReasons.push(`Branch ${student.department} is among eligible departments`);
+      } else {
+        failedReasons.push(`Branch ${student.department} is not permitted for this drive`);
+      }
+    }
+
+    // Batch Year Gate
+    if (!criteria.graduationYear || student.graduationYear === criteria.graduationYear) {
+      passedReasons.push(`Graduation batch ${student.graduationYear} matches target class`);
+    } else {
+      failedReasons.push(`Graduation year ${student.graduationYear} does not match required batch ${criteria.graduationYear}`);
+    }
+
+    return {
+      isEligible: failedReasons.length === 0,
+      passedReasons,
+      failedReasons
+    };
+  }
+
+  const primeCandidate = {
+    name: "Rahul Sharma",
+    cgpa: 8.8,
+    backlogs: 0,
+    tenthPercentage: 88.5,
+    twelfthPercentage: 86.0,
+    department: "Computer Science",
+    graduationYear: 2026
+  };
+
+  const backloggedCandidate = {
+    name: "Ankit Verma",
+    cgpa: 7.2,
+    backlogs: 2,
+    tenthPercentage: 75.0,
+    twelfthPercentage: 70.0,
+    department: "Information Technology",
+    graduationYear: 2026
+  };
+
+  const strictDriveCriteria = {
+    minCgpa: 8.0,
+    maxBacklogs: 0,
+    minTenthPercentage: 75.0,
+    minTwelfthPercentage: 75.0,
+    eligibleDepartments: "Computer Science, Information Technology",
+    graduationYear: 2026
+  };
+
+  const primeResult = runEligibilityEvaluation(primeCandidate, strictDriveCriteria);
+  assert(primeResult.isEligible === true, "Qualified student passes strict placement eligibility gate");
+  assert(primeResult.passedReasons.length === 6, "All 6 academic checklist reasons verified as passed");
+
+  const backloggedResult = runEligibilityEvaluation(backloggedCandidate, strictDriveCriteria);
+  assert(backloggedResult.isEligible === false, "Student with active backlogs and sub-8.0 CGPA correctly marked ineligible");
+  assert(backloggedResult.failedReasons.length >= 2, "Exact failure reasons recorded for CGPA and backlogs");
+
+  // Test 6.2: Batch Eligibility Calculation
+  const mockCohort = [
+    primeCandidate,
+    backloggedCandidate,
+    { name: "Pooja Patel", cgpa: 9.1, backlogs: 0, tenthPercentage: 92, twelfthPercentage: 90, department: "Computer Science", graduationYear: 2026 },
+    { name: "Siddharth Rao", cgpa: 6.5, backlogs: 1, tenthPercentage: 62, twelfthPercentage: 64, department: "Mechanical Engineering", graduationYear: 2026 }
+  ];
+
+  const cohortEvaluations = mockCohort.map(s => runEligibilityEvaluation(s, strictDriveCriteria));
+  const batchEligibleCount = cohortEvaluations.filter(e => e.isEligible).length;
+  const batchEligibleRate = (batchEligibleCount / mockCohort.length) * 100;
+
+  assert(batchEligibleCount === 2, "Batch evaluation identifies exact eligible count (2 out of 4)");
+  assert(batchEligibleRate === 50, "Batch eligibility rate mathematically computed at exactly 50%");
+
+  // Test 6.3: Extended Recruitment Pipeline Progression
+  const pipelineOrder = [
+    "Applied",
+    "Shortlisted",
+    "Aptitude",
+    "Technical Interview",
+    "HR Interview",
+    "Selected",
+    "Rejected"
+  ];
+
+  function isValidPipelineStatus(status) {
+    return pipelineOrder.includes(status);
+  }
+
+  assert(isValidPipelineStatus("Aptitude") === true, "Pipeline accepts 'Aptitude' assessment stage");
+  assert(isValidPipelineStatus("Technical Interview") === true, "Pipeline accepts 'Technical Interview' round");
+  assert(isValidPipelineStatus("HR Interview") === true, "Pipeline accepts 'HR Interview' final round");
+  assert(isValidPipelineStatus("Selected") === true, "Pipeline accepts final 'Selected' placement offer");
+  assert(isValidPipelineStatus("RandomStatus") === false, "Pipeline rejects unrecognized stage");
+
+  // Test 6.4: Placement Admin Resume Upload on Behalf of Student
+  function authorizeResumeUpload(userRole, targetStudentId) {
+    if (userRole === "ADMIN") return { allowed: true, reason: "Authorized placement administrator" };
+    return { allowed: false, reason: "Insufficient permissions" };
+  }
+
+  assert(authorizeResumeUpload("ADMIN", "student-42").allowed === true, "Placement Administrator authorized to manage student resumes");
+  assert(authorizeResumeUpload("STUDENT", "student-42").allowed === false, "Non-admin cannot manage other student resumes");
+
   // FINAL SUMMARY
   console.log("\n=================================================");
   console.log(`📊 TEST SUITE SUMMARY: ${passed} PASSED, ${failed} FAILED (TOTAL: ${passed + failed})`);

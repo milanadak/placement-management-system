@@ -26,21 +26,33 @@ model User {
 }
 
 model StudentProfile {
-  id                String   @id @default(cuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rollNo            String   @unique
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rollNo            String    @unique
+  regNo             String?
   department        String
-  graduationYear    Int      @default(2026)
-  cgpa              Float    @default(0.0)
-  skills            String   @default("")
-  phone             String   @default("")
+  course            String    @default("B.Tech")
+  semester          Int       @default(7)
+  graduationYear    Int       @default(2026)
+  cgpa              Float     @default(0.0)
+  tenthPercentage   Float     @default(85.0)
+  twelfthPercentage Float     @default(82.0)
+  backlogs          Int       @default(0)
+  skills            String    @default("")
+  softSkills        String    @default("Communication, Problem Solving, Leadership, Teamwork")
+  certifications    String    @default("")
+  projects          String    @default("[]") // JSON string: [{ id, title, description, tech, link }]
+  internships       String    @default("[]") // JSON string: [{ id, company, role, duration, description }]
+  semesterMarks     String    @default("[]") // JSON string: [{ sem: 1, sgpa: 8.5 }, ...]
+  phone             String    @default("")
   resumeUrl         String?
   resumeName        String?
+  resumeUploadDate  DateTime?
   bio               String?
-  isProfileComplete Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isProfileComplete Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([department])
   @@index([cgpa])
@@ -57,6 +69,9 @@ model Company {
   location     String
   industry     String
   contactEmail String?
+  hrName       String?
+  hrPhone      String?
+  address      String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -64,25 +79,31 @@ model Company {
 }
 
 model Job {
-  id                  String        @id @default(cuid())
-  companyId           String
-  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  title               String
-  description         String
-  minCgpa             Float         @default(6.0)
-  eligibleDepartments String        @default("ALL") // JSON array or comma separated
-  graduationYear      Int           @default(2026)
-  skills              String        @default("")
-  jobType             String        @default("Full-Time") // Full-Time | Internship
-  location            String        @default("On-Campus / Hybrid")
-  salary              String        @default("Negotiable")
-  deadline            DateTime
-  isActive            Boolean       @default(true)
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  id                   String        @id @default(cuid())
+  companyId            String
+  company              Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title                String
+  description          String
+  minCgpa              Float         @default(6.0)
+  maxBacklogs          Int           @default(0)
+  minTenthPercentage   Float         @default(60.0)
+  minTwelfthPercentage Float         @default(60.0)
+  eligibleDepartments  String        @default("ALL") // JSON array or comma separated
+  graduationYear       Int           @default(2026)
+  skills               String        @default("")
+  jobType              String        @default("Full-Time") // Full-Time | Internship
+  location             String        @default("On-Campus / Hybrid")
+  salary               String        @default("Negotiable")
+  vacancies            Int           @default(5)
+  driveDate            DateTime?
+  interviewRounds      String        @default("Online Assessment, Technical Interview, HR Round")
+  deadline             DateTime
+  isActive             Boolean       @default(true)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  applications        Application[]
-  bookmarks           JobBookmark[]
+  applications         Application[]
+  bookmarks            JobBookmark[]
 
   @@index([companyId])
   @@index([isActive])
@@ -94,7 +115,7 @@ model Application {
   student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
   jobId      String
   job        Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  status     String      @default("Applied") // Applied | Under Review | Shortlisted | Interview Scheduled | Selected | Rejected
+  status     String      @default("Applied") // Applied | Shortlisted | Aptitude | Technical Interview | HR Interview | Selected | Rejected
   coverNote  String?
   appliedAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
@@ -124,7 +145,7 @@ model Interview {
   id             String      @id @default(cuid())
   applicationId  String
   application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  roundName      String      // e.g. "Technical Interview Round 1", "HR Round"
+  roundName      String      // e.g. "Aptitude Round", "Technical Round 1", "HR Round"
   interviewDate  DateTime
   mode           String      @default("ONLINE") // ONLINE | OFFLINE
   locationOrLink String      @default("Google Meet / Placement Office Room 402")

@@ -49,6 +49,7 @@ export default function AdminLayout({
     { name: "Student Records", href: "/admin/students", icon: Users },
     { name: "Corporate Recruiters", href: "/admin/companies", icon: Building2 },
     { name: "Job Postings & Drives", href: "/admin/jobs", icon: Briefcase },
+    { name: "Eligibility Checker", href: "/admin/eligibility", icon: ShieldCheck },
     { name: "Applications Hub", href: "/admin/applications", icon: FileCheck },
     { name: "Interview Management", href: "/admin/interviews", icon: Calendar },
     { name: "Announcements", href: "/admin/announcements", icon: Bell },
