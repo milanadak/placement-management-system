@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const sessionUser = await getSessionUser();
   if (!sessionUser || sessionUser.role !== "STUDENT") {
@@ -19,7 +21,10 @@ export async function GET() {
     })
   ]);
 
-  return NextResponse.json({ notifications, unreadCount });
+  return NextResponse.json(
+    { notifications, unreadCount },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function PATCH(req: Request) {

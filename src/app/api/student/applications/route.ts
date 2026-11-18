@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const sessionUser = await getSessionUser();
@@ -21,7 +24,10 @@ export async function GET() {
     orderBy: { appliedAt: "desc" }
   });
 
-  return NextResponse.json({ applications });
+  return NextResponse.json(
+    { applications },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function DELETE(req: Request) {
@@ -72,7 +78,15 @@ export async function DELETE(req: Request) {
       }
     });
 
-    return NextResponse.json({ success: true, message: "Application withdrawn successfully." });
+    revalidatePath("/student/applications");
+    revalidatePath("/admin/applications");
+    revalidatePath("/student/dashboard");
+    revalidatePath("/admin/dashboard");
+
+    return NextResponse.json(
+      { success: true, message: "Application withdrawn successfully." },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Withdraw application error:", error);
     return NextResponse.json({ error: "Failed to withdraw application." }, { status: 500 });

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const sessionUser = await getSessionUser();
@@ -21,7 +24,10 @@ export async function GET() {
     orderBy: { appliedAt: "desc" }
   });
 
-  return NextResponse.json({ applications });
+  return NextResponse.json(
+    { applications },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function PATCH(req: Request) {
@@ -55,7 +61,15 @@ export async function PATCH(req: Request) {
       }
     });
 
-    return NextResponse.json({ success: true, application });
+    revalidatePath("/admin/applications");
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/student/applications");
+    revalidatePath("/student/dashboard");
+
+    return NextResponse.json(
+      { success: true, application },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Update application error:", error);
     return NextResponse.json({ error: "Failed to update application" }, { status: 500 });

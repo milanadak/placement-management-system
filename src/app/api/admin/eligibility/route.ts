@@ -3,6 +3,8 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { evaluateStudentEligibility, EligibilityCriteria } from "@/lib/eligibility";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
   const sessionUser = await getSessionUser();
   if (!sessionUser || sessionUser.role !== "ADMIN") {
@@ -88,15 +90,18 @@ export async function GET(req: Request) {
   const eligiblePercentage = totalStudents > 0 ? +((eligibleCount / totalStudents) * 100).toFixed(1) : 0;
   const eligibleUnplacedCount = eligibleStudents.filter(s => !s.isPlaced).length;
 
-  return NextResponse.json({
-    criteria: defaultCriteria,
-    totalStudents,
-    eligibleCount,
-    eligiblePercentage,
-    eligibleUnplacedCount,
-    jobs,
-    evaluatedStudents
-  });
+  return NextResponse.json(
+    {
+      criteria: defaultCriteria,
+      totalStudents,
+      eligibleCount,
+      eligiblePercentage,
+      eligibleUnplacedCount,
+      jobs,
+      evaluatedStudents
+    },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function POST(req: Request) {

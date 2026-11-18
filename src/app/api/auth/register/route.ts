@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, signToken, AUTH_COOKIE_NAME } from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 const RegisterSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -17,8 +20,18 @@ const RegisterSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const result = RegisterSchema.safeParse(body);
+    const rawBody = await req.json();
+    // Trim string fields
+    const sanitizedBody = {
+      ...rawBody,
+      email: typeof rawBody.email === "string" ? rawBody.email.trim() : rawBody.email,
+      name: typeof rawBody.name === "string" ? rawBody.name.trim() : rawBody.name,
+      rollNo: typeof rawBody.rollNo === "string" ? rawBody.rollNo.trim().toUpperCase() : rawBody.rollNo,
+      phone: typeof rawBody.phone === "string" ? rawBody.phone.trim() : rawBody.phone,
+      department: typeof rawBody.department === "string" ? rawBody.department.trim() : rawBody.department,
+    };
+
+    const result = RegisterSchema.safeParse(sanitizedBody);
 
     if (!result.success) {
       return NextResponse.json(
@@ -28,13 +41,15 @@ export async function POST(req: Request) {
     }
 
     const { name, email, password, rollNo, department, graduationYear, cgpa, phone, skills } = result.data;
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanRollNo = rollNo.toUpperCase().trim();
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [
-          { email: email.toLowerCase() },
-          { studentProfile: { rollNo: rollNo.toUpperCase() } }
+          { email: cleanEmail },
+          { studentProfile: { rollNo: cleanRollNo } }
         ]
       }
     });
@@ -52,18 +67,18 @@ export async function POST(req: Request) {
     const user = await prisma.user.create({
       data: {
         name,
-        email: email.toLowerCase(),
+        email: cleanEmail,
         password: hashedPassword,
         role: "STUDENT",
         studentProfile: {
           create: {
-            rollNo: rollNo.toUpperCase(),
+            rollNo: cleanRollNo,
             department,
             graduationYear,
             cgpa,
             phone,
             skills: skills || "",
-            isProfileComplete: Boolean(rollNo && department && phone && cgpa > 0),
+            isProfileComplete: Boolean(cleanRollNo && department && phone && cgpa > 0),
           }
         },
         notifications: {
@@ -86,16 +101,34 @@ export async function POST(req: Request) {
       role: "STUDENT"
     });
 
-    const response = NextResponse.json({
-      success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        profile: user.studentProfile
+    // Invalidate caches across the platform so newly registered student appears immediately
+    try {
+      revalidatePath("/admin/students");
+      revalidatePath("/admin/dashboard");
+      revalidatePath("/admin/eligibility");
+      revalidatePath("/student/dashboard");
+      revalidatePath("/student/profile");
+    } catch (e) {
+      // In case of non-critical revalidate error
+    }
+
+    const response = NextResponse.json(
+      {
+        success: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          profile: user.studentProfile
+        }
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate"
+        }
       }
-    });
+    );
 
     response.cookies.set({
       name: AUTH_COOKIE_NAME,

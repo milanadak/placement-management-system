@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+
+export const dynamic = "force-dynamic";
 
 const UpdateProfileSchema = z.object({
   name: z.string().min(2),
@@ -49,7 +52,10 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ user });
+  return NextResponse.json(
+    { user },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function PUT(req: Request) {
@@ -97,7 +103,7 @@ export async function PUT(req: Request) {
         studentProfile: {
           upsert: {
             create: {
-              rollNo: "TBD",
+              rollNo: `STU-${Date.now().toString().slice(-6)}`,
               phone,
               department,
               course,
@@ -143,10 +149,15 @@ export async function PUT(req: Request) {
       }
     });
 
-    return NextResponse.json({
-      success: true,
-      user: updatedUser
-    });
+    revalidatePath("/student/profile");
+    revalidatePath("/student/dashboard");
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/dashboard");
+
+    return NextResponse.json(
+      { success: true, user: updatedUser },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (err: any) {
     console.error("Profile update error:", err);
     return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });

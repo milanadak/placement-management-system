@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+
+export const dynamic = "force-dynamic";
 
 const UpdateStudentAdminSchema = z.object({
   id: z.string().min(1),
@@ -52,7 +55,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ student });
+    return NextResponse.json(
+      { student },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   }
 
   const students = await prisma.user.findMany({
@@ -70,7 +76,10 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "desc" }
   });
 
-  return NextResponse.json({ students });
+  return NextResponse.json(
+    { students },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function PUT(req: Request) {
@@ -137,7 +146,14 @@ export async function PUT(req: Request) {
       }
     });
 
-    return NextResponse.json({ success: true, user: updated });
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/eligibility");
+
+    return NextResponse.json(
+      { success: true, user: updated },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Admin student update error:", error);
     return NextResponse.json({ error: "Failed to update student record" }, { status: 500 });

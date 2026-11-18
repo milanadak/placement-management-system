@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+
+export const dynamic = "force-dynamic";
 
 const InterviewSchema = z.object({
   applicationId: z.string().min(1),
@@ -30,7 +33,10 @@ export async function GET() {
     orderBy: { interviewDate: "desc" }
   });
 
-  return NextResponse.json({ interviews });
+  return NextResponse.json(
+    { interviews },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function POST(req: Request) {

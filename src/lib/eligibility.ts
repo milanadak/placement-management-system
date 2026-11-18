@@ -32,16 +32,89 @@ export interface EligibilityResult {
   }[];
 }
 
+export const DEPARTMENT_ALIASES: Record<string, string[]> = {
+  "computer science": [
+    "cs", "cse", "computer science", "computer science & engineering",
+    "computer science and engineering", "software engineering", "computer"
+  ],
+  "information technology": [
+    "it", "information technology", "information science", "ise", "info tech"
+  ],
+  "data science": [
+    "ds", "data science", "ai", "artificial intelligence", "ai & ml", "ai and ml", "aiml", "cads"
+  ],
+  "electronics": [
+    "electronics", "ece", "electronics and communication", "electronics & communication",
+    "electronics & communication engineering", "etc", "electronics engineering"
+  ],
+  "electrical engineering": [
+    "electrical", "ee", "eee", "electrical engineering",
+    "electrical & electronics engineering", "electrical and electronics"
+  ],
+  "mechanical engineering": [
+    "mechanical", "me", "mech", "mechanical engineering"
+  ],
+  "civil engineering": [
+    "civil", "ce", "civil engineering"
+  ]
+};
+
+export function isDepartmentMatch(studentDept: string, eligibleDepts: string[]): boolean {
+  if (!studentDept) return false;
+  if (!eligibleDepts || eligibleDepts.length === 0 || eligibleDepts.includes("ALL")) {
+    return true;
+  }
+
+  const sDeptClean = studentDept.trim().toLowerCase();
+
+  // Find canonical category for student dept
+  let studentCanonical: string | null = null;
+  for (const [canonical, aliases] of Object.entries(DEPARTMENT_ALIASES)) {
+    if (aliases.some(alias => sDeptClean === alias || sDeptClean.includes(alias) || alias.includes(sDeptClean))) {
+      studentCanonical = canonical;
+      break;
+    }
+  }
+
+  return eligibleDepts.some(eDept => {
+    const eDeptClean = eDept.trim().toLowerCase();
+    if (eDeptClean === "all") return true;
+
+    // Direct substring or exact match
+    if (sDeptClean === eDeptClean || sDeptClean.includes(eDeptClean) || eDeptClean.includes(sDeptClean)) {
+      return true;
+    }
+
+    // Match via canonical mapping
+    if (studentCanonical) {
+      const allowedAliases = DEPARTMENT_ALIASES[studentCanonical] || [];
+      if (allowedAliases.some(alias => eDeptClean === alias || eDeptClean.includes(alias) || alias.includes(eDeptClean))) {
+        return true;
+      }
+    }
+
+    // Check if eDept's canonical category matches student's
+    for (const [canonical, aliases] of Object.entries(DEPARTMENT_ALIASES)) {
+      if (aliases.some(alias => eDeptClean === alias || eDeptClean.includes(alias) || alias.includes(eDeptClean))) {
+        if (canonical === studentCanonical) return true;
+      }
+    }
+
+    return false;
+  });
+}
+
 export function evaluateStudentEligibility(
   student: StudentAcademicData,
   criteria: EligibilityCriteria
 ): EligibilityResult {
   const reasons: EligibilityResult["reasons"] = [];
 
-  // 1. CGPA Criterion
+  // 1. CGPA Criterion (with small float tolerance)
   const minCgpa = criteria.minCgpa || 6.0;
-  const studentCgpa = student.cgpa || 0.0;
-  if (studentCgpa >= minCgpa) {
+  const studentCgpa = parseFloat(String(student.cgpa || 0.0));
+  const isCgpaSatisfied = studentCgpa >= (minCgpa - 0.01);
+  if (isCgpaSatisfied) {
     reasons.push({
       criterion: "CGPA Requirement",
       passed: true,
@@ -92,7 +165,7 @@ export function evaluateStudentEligibility(
   }
 
   const isAllDepts = eligibleDepts.includes("ALL") || eligibleDepts.length === 0;
-  const isBranchMatched = isAllDepts || eligibleDepts.some(d => d.toLowerCase() === student.department.toLowerCase());
+  const isBranchMatched = isDepartmentMatch(student.department, eligibleDepts);
 
   if (isBranchMatched) {
     reasons.push({
@@ -148,8 +221,9 @@ export function evaluateStudentEligibility(
 
   // 6. Graduation Year
   if (criteria.graduationYear) {
-    const studentYear = student.graduationYear ?? 2026;
-    if (studentYear === criteria.graduationYear) {
+    const studentYear = Number(student.graduationYear ?? 2026);
+    const targetYear = Number(criteria.graduationYear);
+    if (studentYear === targetYear || Math.abs(studentYear - targetYear) <= 1) {
       reasons.push({
         criterion: "Passing Out Batch",
         passed: true,
@@ -159,7 +233,7 @@ export function evaluateStudentEligibility(
       reasons.push({
         criterion: "Passing Out Batch",
         passed: false,
-        message: `Graduation year mismatch (Required: ${criteria.graduationYear}, Candidate: ${studentYear})`
+        message: `Graduation year mismatch (Required: ${targetYear}, Candidate: ${studentYear})`
       });
     }
   }

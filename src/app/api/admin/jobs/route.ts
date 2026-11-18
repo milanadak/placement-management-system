@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+
+export const dynamic = "force-dynamic";
 
 const JobSchema = z.object({
   companyId: z.string().min(1),
@@ -37,7 +40,10 @@ export async function GET() {
     orderBy: { createdAt: "desc" }
   });
 
-  return NextResponse.json({ jobs });
+  return NextResponse.json(
+    { jobs },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function POST(req: Request) {
@@ -89,7 +95,15 @@ export async function POST(req: Request) {
       }
     });
 
-    return NextResponse.json({ success: true, job });
+    revalidatePath("/jobs");
+    revalidatePath("/admin/jobs");
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/student/jobs");
+
+    return NextResponse.json(
+      { success: true, job },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Create job error:", error);
     return NextResponse.json({ error: "Failed to create job" }, { status: 500 });
@@ -136,7 +150,14 @@ export async function PUT(req: Request) {
       include: { company: true }
     });
 
-    return NextResponse.json({ success: true, job });
+    revalidatePath("/jobs");
+    revalidatePath("/admin/jobs");
+    revalidatePath("/student/jobs");
+
+    return NextResponse.json(
+      { success: true, job },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Update job error:", error);
     return NextResponse.json({ error: "Failed to update job" }, { status: 500 });
@@ -161,7 +182,14 @@ export async function PATCH(req: Request) {
       include: { company: true }
     });
 
-    return NextResponse.json({ success: true, job });
+    revalidatePath("/jobs");
+    revalidatePath("/admin/jobs");
+    revalidatePath("/student/jobs");
+
+    return NextResponse.json(
+      { success: true, job },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     return NextResponse.json({ error: "Failed to toggle drive status" }, { status: 500 });
   }
@@ -179,6 +207,15 @@ export async function DELETE(req: Request) {
     if (!id) return NextResponse.json({ error: "Missing job ID" }, { status: 400 });
 
     await prisma.job.delete({ where: { id } });
+
+    revalidatePath("/jobs");
+    revalidatePath("/admin/jobs");
+    revalidatePath("/student/jobs");
+
+    return NextResponse.json(
+      { success: true },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: "Failed to delete job" }, { status: 500 });

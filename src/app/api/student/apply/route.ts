@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isDepartmentMatch } from "@/lib/eligibility";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   const sessionUser = await getSessionUser();
@@ -25,7 +29,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Job opening is no longer accepting applications." }, { status: 404 });
     }
 
-    if (new Date() > new Date(job.deadline)) {
+    const deadlineDate = new Date(job.deadline);
+    deadlineDate.setHours(23, 59, 59, 999);
+    if (new Date().getTime() > deadlineDate.getTime()) {
       return NextResponse.json({ error: "The application deadline for this position has passed." }, { status: 400 });
     }
 
@@ -42,24 +48,25 @@ export async function POST(req: Request) {
     const profile = student.studentProfile;
 
     // 3. Automatic Eligibility Evaluation
-    // CGPA check
-    if (profile.cgpa < job.minCgpa) {
+    // CGPA check with float tolerance
+    const studentCgpa = parseFloat(String(profile.cgpa || 0));
+    const requiredCgpa = parseFloat(String(job.minCgpa || 0));
+    if (studentCgpa < (requiredCgpa - 0.01)) {
       return NextResponse.json(
         {
-          error: `Not eligible: Required CGPA is ${job.minCgpa.toFixed(1)}, your CGPA is ${profile.cgpa.toFixed(1)}.`
+          error: `Not eligible: Required CGPA is ${requiredCgpa.toFixed(1)}, your CGPA is ${studentCgpa.toFixed(1)}.`
         },
         { status: 403 }
       );
     }
 
-    // Department check
-    if (job.eligibleDepartments !== "ALL") {
+    // Department check with full alias matching
+    if (job.eligibleDepartments && job.eligibleDepartments !== "ALL") {
       const allowedDepts = job.eligibleDepartments
         .split(",")
-        .map(d => d.trim().toLowerCase());
+        .map(d => d.trim());
       
-      const studentDept = profile.department.trim().toLowerCase();
-      const isDeptAllowed = allowedDepts.some(d => d === studentDept || studentDept.includes(d) || d.includes(studentDept));
+      const isDeptAllowed = isDepartmentMatch(profile.department || "", allowedDepts);
 
       if (!isDeptAllowed) {
         return NextResponse.json(
@@ -71,14 +78,18 @@ export async function POST(req: Request) {
       }
     }
 
-    // Graduation Year check
-    if (job.graduationYear && profile.graduationYear !== job.graduationYear) {
-      return NextResponse.json(
-        {
-          error: `Not eligible: Position is open for ${job.graduationYear} batch graduates. Your registered batch is ${profile.graduationYear}.`
-        },
-        { status: 403 }
-      );
+    // Graduation Year check with batch tolerance
+    if (job.graduationYear && profile.graduationYear) {
+      const studentBatch = Number(profile.graduationYear);
+      const jobBatch = Number(job.graduationYear);
+      if (studentBatch !== jobBatch && Math.abs(studentBatch - jobBatch) > 1) {
+        return NextResponse.json(
+          {
+            error: `Not eligible: Position is open for ${job.graduationYear} batch graduates. Your registered batch is ${profile.graduationYear}.`
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // 4. Duplicate Application Prevention
@@ -123,10 +134,17 @@ export async function POST(req: Request) {
       }
     });
 
-    return NextResponse.json({
-      success: true,
-      application
-    });
+    // 7. Invalidate paths for immediate sync
+    revalidatePath("/student/applications");
+    revalidatePath("/admin/applications");
+    revalidatePath("/student/dashboard");
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/student/jobs");
+
+    return NextResponse.json(
+      { success: true, application },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Job application error:", error);
     return NextResponse.json({ error: "Failed to submit application. Please try again." }, { status: 500 });

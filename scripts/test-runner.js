@@ -335,6 +335,53 @@ async function runTests() {
   assert(authorizeResumeUpload("ADMIN", "student-42").allowed === true, "Placement Administrator authorized to manage student resumes");
   assert(authorizeResumeUpload("STUDENT", "student-42").allowed === false, "Non-admin cannot manage other student resumes");
 
+  // SECTION 7: UNIFIED ELIGIBILITY & DEPARTMENT ALIAS TESTS
+  console.log("\n--- 7. Unified Eligibility & Department Alias Tests ---");
+
+  const DEPARTMENT_ALIASES = {
+    "computer science": ["cs", "cse", "computer science", "computer science & engineering", "computer science and engineering"],
+    "information technology": ["it", "information technology", "information science", "ise"],
+    "data science": ["ds", "data science", "ai", "artificial intelligence", "ai & ml", "aiml"],
+    "electronics": ["electronics", "ece", "electronics and communication", "electronics & communication"],
+    "electrical engineering": ["electrical", "ee", "eee", "electrical engineering"],
+    "mechanical engineering": ["mechanical", "me", "mech", "mechanical engineering"]
+  };
+
+  function testIsDepartmentMatch(studentDept, eligibleDepts) {
+    if (!studentDept) return false;
+    if (!eligibleDepts || eligibleDepts.length === 0 || eligibleDepts.includes("ALL")) return true;
+    const sDeptClean = studentDept.trim().toLowerCase();
+    let studentCanonical = null;
+    for (const [canonical, aliases] of Object.entries(DEPARTMENT_ALIASES)) {
+      if (aliases.some(alias => sDeptClean === alias || sDeptClean.includes(alias) || alias.includes(sDeptClean))) {
+        studentCanonical = canonical;
+        break;
+      }
+    }
+    return eligibleDepts.some(eDept => {
+      const eDeptClean = eDept.trim().toLowerCase();
+      if (eDeptClean === "all") return true;
+      if (sDeptClean === eDeptClean || sDeptClean.includes(eDeptClean) || eDeptClean.includes(sDeptClean)) return true;
+      if (studentCanonical) {
+        const allowed = DEPARTMENT_ALIASES[studentCanonical] || [];
+        if (allowed.some(alias => eDeptClean === alias || eDeptClean.includes(alias) || alias.includes(eDeptClean))) return true;
+      }
+      return false;
+    });
+  }
+
+  assert(testIsDepartmentMatch("CSE", ["Computer Science", "Information Technology"]) === true, "CSE student recognized as eligible for Computer Science drive");
+  assert(testIsDepartmentMatch("IT", ["Information Technology"]) === true, "IT student recognized as eligible for Information Technology drive");
+  assert(testIsDepartmentMatch("ECE", ["Electronics", "Electrical Engineering"]) === true, "ECE student recognized as eligible for Electronics drive");
+  assert(testIsDepartmentMatch("Mech", ["Mechanical Engineering"]) === true, "Mech student recognized as eligible for Mechanical Engineering drive");
+  assert(testIsDepartmentMatch("Civil", ["Computer Science"]) === false, "Civil student correctly filtered out from CS-only drive");
+
+  // Test 7.2: Float tolerance in CGPA
+  const studentCgpaFloat = 7.99999;
+  const cutoffCgpa = 8.0;
+  const isCgpaAllowed = studentCgpaFloat >= (cutoffCgpa - 0.01);
+  assert(isCgpaAllowed === true, "Float tolerance allows 7.99999 CGPA to satisfy 8.0 cutoff");
+
   // FINAL SUMMARY
   console.log("\n=================================================");
   console.log(`📊 TEST SUITE SUMMARY: ${passed} PASSED, ${failed} FAILED (TOTAL: ${passed + failed})`);

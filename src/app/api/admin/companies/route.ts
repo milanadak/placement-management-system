@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+
+export const dynamic = "force-dynamic";
 
 const CompanySchema = z.object({
   name: z.string().min(2),
@@ -32,7 +35,10 @@ export async function GET() {
     orderBy: { createdAt: "desc" }
   });
 
-  return NextResponse.json({ companies });
+  return NextResponse.json(
+    { companies },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+  );
 }
 
 export async function POST(req: Request) {
@@ -66,7 +72,14 @@ export async function POST(req: Request) {
       }
     });
 
-    return NextResponse.json({ success: true, company });
+    revalidatePath("/companies");
+    revalidatePath("/admin/companies");
+    revalidatePath("/admin/dashboard");
+
+    return NextResponse.json(
+      { success: true, company },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Create company error:", error);
     return NextResponse.json({ error: "Failed to create company" }, { status: 500 });
@@ -106,7 +119,14 @@ export async function PUT(req: Request) {
       }
     });
 
-    return NextResponse.json({ success: true, company });
+    revalidatePath("/companies");
+    revalidatePath("/admin/companies");
+    revalidatePath("/admin/dashboard");
+
+    return NextResponse.json(
+      { success: true, company },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Update company error:", error);
     return NextResponse.json({ error: "Failed to update company" }, { status: 500 });
@@ -128,7 +148,14 @@ export async function DELETE(req: Request) {
       where: { id }
     });
 
-    return NextResponse.json({ success: true, message: "Company deleted successfully" });
+    revalidatePath("/companies");
+    revalidatePath("/admin/companies");
+    revalidatePath("/admin/dashboard");
+
+    return NextResponse.json(
+      { success: true, message: "Company deleted successfully" },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   } catch (error: any) {
     console.error("Delete company error:", error);
     return NextResponse.json({ error: "Failed to delete company" }, { status: 500 });

@@ -1,3 +1,5 @@
+import { isDepartmentMatch } from "@/lib/eligibility";
+
 export interface StudentMatchProfile {
   cgpa: number;
   department: string;
@@ -209,39 +211,47 @@ export function checkDetailedEligibility(
   student: StudentMatchProfile,
   job: JobMatchCriteria
 ): EligibilityChecklist {
-  const isCgpaPass = student.cgpa >= job.minCgpa;
-  const jobDepts = job.eligibleDepartments.toLowerCase();
-  const studentDept = student.department.toLowerCase();
-  const isDeptPass = jobDepts === "all" || jobDepts.includes(studentDept) || studentDept.includes(jobDepts);
-  const isBatchPass = !job.graduationYear || student.graduationYear === job.graduationYear;
+  const sCgpa = parseFloat(String(student?.cgpa || 0));
+  const jMinCgpa = parseFloat(String(job?.minCgpa || 0));
+  const isCgpaPass = sCgpa >= (jMinCgpa - 0.01);
+
+  const eligibleDeptsList = (job.eligibleDepartments || "ALL")
+    .split(",")
+    .map(d => d.trim());
+  const isDeptPass = isDepartmentMatch(student?.department || "", eligibleDeptsList);
+
+  const studentBatch = Number(student?.graduationYear || 2026);
+  const jobBatch = Number(job?.graduationYear || 2026);
+  const isBatchPass = !job.graduationYear || studentBatch === jobBatch || Math.abs(studentBatch - jobBatch) <= 1;
 
   const now = new Date();
   const deadlineDate = new Date(job.deadline);
-  const isDeadlinePass = now <= deadlineDate;
+  deadlineDate.setHours(23, 59, 59, 999);
+  const isDeadlinePass = now.getTime() <= deadlineDate.getTime();
 
   return {
     cgpa: {
       pass: isCgpaPass,
-      required: job.minCgpa,
-      actual: student.cgpa,
+      required: jMinCgpa,
+      actual: sCgpa,
       message: isCgpaPass
-        ? `Meets minimum CGPA of ${job.minCgpa.toFixed(1)} (Your CGPA: ${student.cgpa.toFixed(2)})`
-        : `Required CGPA is ${job.minCgpa.toFixed(1)}, but your CGPA is ${student.cgpa.toFixed(2)}`
+        ? `Meets minimum CGPA of ${jMinCgpa.toFixed(1)} (Your CGPA: ${sCgpa.toFixed(2)})`
+        : `Required CGPA is ${jMinCgpa.toFixed(1)}, but your CGPA is ${sCgpa.toFixed(2)}`
     },
     department: {
       pass: isDeptPass,
       required: job.eligibleDepartments,
-      actual: student.department,
+      actual: student?.department || "Unspecified",
       message: isDeptPass
-        ? `Department eligible (${student.department})`
+        ? `Department eligible (${student?.department || "Eligible"})`
         : `Department restricted: Only ${job.eligibleDepartments} eligible`
     },
     batch: {
       pass: isBatchPass,
       required: job.graduationYear,
-      actual: student.graduationYear,
+      actual: student?.graduationYear || 2026,
       message: isBatchPass
-        ? `Eligible graduation batch (${student.graduationYear})`
+        ? `Eligible graduation batch (${student?.graduationYear || 2026})`
         : `Open only for ${job.graduationYear} batch`
     },
     deadline: {
