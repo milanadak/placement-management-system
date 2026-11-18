@@ -46,3 +46,4 @@ backup/
 public/uploads/
 !public/uploads/.gitkeep
 .env*
+.neon
