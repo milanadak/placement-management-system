@@ -1,0 +1,150 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String
+  email         String          @unique
+  password      String
+  role          String          @default("STUDENT") // STUDENT | ADMIN
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  studentProfile StudentProfile?
+  applications   Application[]
+  notifications  Notification[]
+  announcements  Announcement[]
+
+  @@index([email])
+}
+
+model StudentProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rollNo            String   @unique
+  department        String
+  graduationYear    Int      @default(2026)
+  cgpa              Float    @default(0.0)
+  skills            String   @default("")
+  phone             String   @default("")
+  resumeUrl         String?
+  resumeName        String?
+  bio               String?
+  isProfileComplete Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([department])
+  @@index([cgpa])
+  @@index([graduationYear])
+}
+
+model Company {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  logo         String?
+  website      String?
+  description  String
+  location     String
+  industry     String
+  contactEmail String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  jobs         Job[]
+}
+
+model Job {
+  id                  String        @id @default(cuid())
+  companyId           String
+  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title               String
+  description         String
+  minCgpa             Float         @default(6.0)
+  eligibleDepartments String        @default("ALL") // JSON array or comma separated
+  graduationYear      Int           @default(2026)
+  skills              String        @default("")
+  jobType             String        @default("Full-Time") // Full-Time | Internship
+  location            String        @default("On-Campus / Hybrid")
+  salary              String        @default("Negotiable")
+  deadline            DateTime
+  isActive            Boolean       @default(true)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  applications        Application[]
+
+  @@index([companyId])
+  @@index([isActive])
+}
+
+model Application {
+  id         String      @id @default(cuid())
+  studentId  String
+  student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  jobId      String
+  job        Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status     String      @default("Applied") // Applied | Under Review | Shortlisted | Interview Scheduled | Selected | Rejected
+  coverNote  String?
+  appliedAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  interviews Interview[]
+
+  @@unique([studentId, jobId]) // Prevent duplicate applications
+  @@index([studentId])
+  @@index([jobId])
+  @@index([status])
+}
+
+model Interview {
+  id             String      @id @default(cuid())
+  applicationId  String
+  application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  roundName      String      // e.g. "Technical Interview Round 1", "HR Round"
+  interviewDate  DateTime
+  mode           String      @default("ONLINE") // ONLINE | OFFLINE
+  locationOrLink String      @default("Google Meet / Placement Office Room 402")
+  notes          String?
+  status         String      @default("Scheduled") // Scheduled | Completed | Cancelled
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([applicationId])
+}
+
+model Announcement {
+  id         String   @id @default(cuid())
+  title      String
+  content    String
+  priority   String   @default("MEDIUM") // LOW | MEDIUM | HIGH
+  targetDept String   @default("ALL")
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([targetDept])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+}
