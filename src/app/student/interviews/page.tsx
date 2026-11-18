@@ -14,7 +14,7 @@ export default async function StudentInterviewsPage() {
   if (!sessionUser) redirect("/login");
 
   // Fetch interviews connected to applications of this student
-  const student = await prisma.user.findUnique({
+  let student = await prisma.user.findUnique({
     where: { id: sessionUser.id },
     include: {
       applications: {
@@ -28,9 +28,23 @@ export default async function StudentInterviewsPage() {
     }
   });
 
-  if (!student) redirect("/login");
+  if (!student && sessionUser.email) {
+    student = await prisma.user.findUnique({
+      where: { email: sessionUser.email },
+      include: {
+        applications: {
+          include: {
+            job: { include: { company: true } },
+            interviews: {
+              orderBy: { interviewDate: "asc" }
+            }
+          }
+        }
+      }
+    });
+  }
 
-  const allInterviews = student.applications.flatMap(app =>
+  const allInterviews = (student?.applications || []).flatMap(app =>
     app.interviews.map(inv => ({
       ...inv,
       jobTitle: app.job.title,

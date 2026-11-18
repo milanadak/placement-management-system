@@ -11,10 +11,17 @@ export default async function StudentAnnouncementsPage() {
   const sessionUser = await getSessionUser();
   if (!sessionUser) redirect("/login");
 
-  const student = await prisma.user.findUnique({
+  let student = await prisma.user.findUnique({
     where: { id: sessionUser.id },
     include: { studentProfile: true }
   });
+
+  if (!student && sessionUser.email) {
+    student = await prisma.user.findUnique({
+      where: { email: sessionUser.email },
+      include: { studentProfile: true }
+    });
+  }
 
   const department = student?.studentProfile?.department || "Computer Science";
 
