@@ -1,7 +1,7 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getSessionUser } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { redirect } from "next/navigation";
 import {
   FileCheck,
   Building2,
@@ -11,30 +11,60 @@ import {
   AlertCircle,
   ExternalLink,
   ChevronRight,
-  Briefcase
+  Briefcase,
+  Trash2,
+  Loader2,
+  Undo2
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
-export const dynamic = "force-dynamic";
+export default function StudentApplicationsPage() {
+  const [applications, setApplications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
 
-export default async function StudentApplicationsPage() {
-  const sessionUser = await getSessionUser();
-  if (!sessionUser) redirect("/login");
+  useEffect(() => {
+    fetchApplications();
+  }, []);
 
-  const applications = await prisma.application.findMany({
-    where: { studentId: sessionUser.id },
-    include: {
-      job: {
-        include: { company: true }
-      },
-      interviews: {
-        orderBy: { interviewDate: "asc" }
+  const fetchApplications = async () => {
+    try {
+      const res = await fetch("/api/student/applications");
+      const data = await res.json();
+      if (data?.applications) {
+        setApplications(data.applications);
       }
-    },
-    orderBy: { appliedAt: "desc" }
-  });
+    } catch {
+      toast.error("Failed to load applications.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWithdraw = async (applicationId: string, jobTitle: string) => {
+    if (!confirm(`Are you sure you want to withdraw your application for "${jobTitle}"? This cannot be undone.`)) {
+      return;
+    }
+
+    setWithdrawingId(applicationId);
+    try {
+      const res = await fetch(`/api/student/applications?id=${applicationId}`, {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to withdraw application");
+
+      toast.success("Application withdrawn successfully.");
+      fetchApplications();
+    } catch (err: any) {
+      toast.error(err.message || "Could not withdraw application.");
+    } finally {
+      setWithdrawingId(null);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -80,7 +110,12 @@ export default async function StudentApplicationsPage() {
         </Link>
       </div>
 
-      {applications.length === 0 ? (
+      {loading ? (
+        <div className="text-center py-20 text-slate-400">
+          <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-blue-600" />
+          <span>Loading applications pipeline...</span>
+        </div>
+      ) : applications.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
           <FileCheck className="h-12 w-12 text-slate-300 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-slate-700">No applications submitted yet</h3>
@@ -98,6 +133,7 @@ export default async function StudentApplicationsPage() {
           {applications.map((app) => {
             const currentStageIndex = stages.indexOf(app.status);
             const isRejected = app.status === "Rejected";
+            const canWithdraw = app.status === "Applied" || app.status === "Under Review";
 
             return (
               <Card key={app.id} className="border-slate-200 hover:shadow-md transition">
@@ -105,7 +141,12 @@ export default async function StudentApplicationsPage() {
                   <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-4">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-bold text-slate-900 text-lg">{app.job.title}</h3>
+                        <Link
+                          href={`/student/jobs/${app.job.id}`}
+                          className="font-bold text-slate-900 text-lg hover:text-blue-600 transition"
+                        >
+                          {app.job.title}
+                        </Link>
                         <Badge variant="outline" className="font-semibold text-slate-700">
                           {app.job.company.name}
                         </Badge>
@@ -121,8 +162,25 @@ export default async function StudentApplicationsPage() {
                       </div>
                     </div>
 
-                    <div className="shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       {getStatusBadge(app.status)}
+
+                      {canWithdraw && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={withdrawingId === app.id}
+                          onClick={() => handleWithdraw(app.id, app.job.title)}
+                          className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
+                        >
+                          {withdrawingId === app.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Undo2 className="h-3.5 w-3.5" />
+                          )}
+                          <span>Withdraw</span>
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -171,14 +229,14 @@ export default async function StudentApplicationsPage() {
                   )}
 
                   {/* Scheduled Interviews attached */}
-                  {app.interviews.length > 0 && (
+                  {app.interviews && app.interviews.length > 0 && (
                     <div className="mt-6 pt-4 border-t border-slate-100 space-y-2">
                       <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                         <Calendar className="h-3.5 w-3.5 text-blue-600" />
                         <span>Interview Rounds for this Application</span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {app.interviews.map((inv) => (
+                        {app.interviews.map((inv: any) => (
                           <div
                             key={inv.id}
                             className="p-3 rounded-lg border border-slate-200 bg-slate-50/70 text-xs space-y-1"

@@ -91,3 +91,94 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to schedule interview" }, { status: 500 });
   }
 }
+
+export async function PUT(req: Request) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser || sessionUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json();
+    const { id, roundName, interviewDate, mode, locationOrLink, notes, status } = body;
+
+    if (!id) return NextResponse.json({ error: "Interview ID required" }, { status: 400 });
+
+    const updated = await prisma.interview.update({
+      where: { id },
+      data: {
+        roundName,
+        interviewDate: new Date(interviewDate),
+        mode,
+        locationOrLink,
+        notes,
+        status: status || "Scheduled"
+      },
+      include: {
+        application: {
+          include: {
+            job: { include: { company: true } },
+            student: true
+          }
+        }
+      }
+    });
+
+    // Notify candidate of rescheduled round
+    await prisma.notification.create({
+      data: {
+        userId: updated.application.studentId,
+        title: `Interview Updated: ${updated.application.job.company.name}`,
+        message: `Your ${roundName} has been rescheduled to ${new Date(interviewDate).toLocaleString()}.`,
+        link: "/student/interviews"
+      }
+    });
+
+    return NextResponse.json({ success: true, interview: updated });
+  } catch (error: any) {
+    console.error("Update interview error:", error);
+    return NextResponse.json({ error: "Failed to update interview" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser || sessionUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Missing interview ID" }, { status: 400 });
+
+    const interview = await prisma.interview.findUnique({
+      where: { id },
+      include: {
+        application: {
+          include: {
+            job: { include: { company: true } }
+          }
+        }
+      }
+    });
+
+    if (!interview) return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+
+    await prisma.interview.delete({ where: { id } });
+
+    // Notify student of cancellation
+    await prisma.notification.create({
+      data: {
+        userId: interview.application.studentId,
+        title: `Interview Cancelled: ${interview.application.job.company.name}`,
+        message: `Your scheduled round (${interview.roundName}) has been cancelled by the placement coordinator.`,
+        link: "/student/interviews"
+      }
+    });
+
+    return NextResponse.json({ success: true, message: "Interview round cancelled." });
+  } catch (error: any) {
+    return NextResponse.json({ error: "Failed to cancel interview" }, { status: 500 });
+  }
+}

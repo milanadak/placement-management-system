@@ -17,6 +17,9 @@ import {
   Check,
   Send,
   Loader2,
+  Bookmark,
+  Sparkles,
+  ArrowUpDown,
   SlidersHorizontal
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,18 +27,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { calculateSmartMatch, checkDetailedEligibility } from "@/lib/matching";
 
 export default function StudentJobsPage() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [student, setStudent] = useState<any>(null);
   const [appliedJobIds, setAppliedJobIds] = useState<Map<string, string>>(new Map());
+  const [bookmarkedJobIds, setBookmarkedJobIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
-  // Filters
+  // Filters & Sorting
   const [searchTerm, setSearchTerm] = useState("");
   const [deptFilter, setDeptFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
-  const [eligibilityFilter, setEligibilityFilter] = useState("ALL"); // ALL | ELIGIBLE | APPLIED
+  const [cgpaFilter, setCgpaFilter] = useState("ALL"); // ALL | 6.5 | 7.5 | 8.0
+  const [statusView, setStatusView] = useState("ALL"); // ALL | ELIGIBLE | APPLIED | BOOKMARKS
+  const [sortBy, setSortBy] = useState<"newest" | "salary_desc" | "deadline">("newest");
 
   // Modal State for Apply
   const [selectedJobForApply, setSelectedJobForApply] = useState<any | null>(null);
@@ -48,13 +55,15 @@ export default function StudentJobsPage() {
 
   const loadData = async () => {
     try {
-      const [profileRes, jobsRes] = await Promise.all([
+      const [profileRes, jobsRes, bookmarksRes] = await Promise.all([
         fetch("/api/student/profile"),
-        fetch("/api/jobs")
+        fetch("/api/jobs"),
+        fetch("/api/student/bookmarks")
       ]);
 
       const profileData = await profileRes.json();
       const jobsData = await jobsRes.json();
+      const bookmarksData = await bookmarksRes.json();
 
       if (profileData?.user) {
         setStudent(profileData.user);
@@ -68,6 +77,12 @@ export default function StudentJobsPage() {
       if (jobsData?.jobs) {
         setJobs(jobsData.jobs);
       }
+
+      if (bookmarksData?.bookmarks) {
+        const bSet = new Set<string>();
+        bookmarksData.bookmarks.forEach((b: any) => bSet.add(b.jobId));
+        setBookmarkedJobIds(bSet);
+      }
     } catch {
       toast.error("Failed to load campus drives.");
     } finally {
@@ -75,49 +90,30 @@ export default function StudentJobsPage() {
     }
   };
 
-  // Eligibility evaluation helper
-  const checkEligibility = (job: any) => {
-    if (!student || !student.studentProfile) {
-      return { eligible: false, reason: "Incomplete student profile" };
+  const handleToggleBookmark = async (jobId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      const res = await fetch("/api/student/bookmarks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error("Bookmark update failed");
+
+      setBookmarkedJobIds(prev => {
+        const next = new Set(prev);
+        if (data.bookmarked) next.add(jobId);
+        else next.delete(jobId);
+        return next;
+      });
+
+      toast.success(data.bookmarked ? "Job saved to your bookmarks!" : "Job removed from bookmarks.");
+    } catch {
+      toast.error("Could not update bookmark.");
     }
-
-    const p = student.studentProfile;
-
-    // CGPA Check
-    if (p.cgpa < job.minCgpa) {
-      return {
-        eligible: false,
-        reason: `Required CGPA is ${job.minCgpa.toFixed(1)}, your CGPA is ${p.cgpa.toFixed(1)}.`
-      };
-    }
-
-    // Department Check
-    if (job.eligibleDepartments !== "ALL") {
-      const allowedDepts = job.eligibleDepartments
-        .split(",")
-        .map((d: string) => d.trim().toLowerCase());
-      const studentDept = p.department.trim().toLowerCase();
-      const isAllowed = allowedDepts.some((d: string) =>
-        d === studentDept || studentDept.includes(d) || d.includes(studentDept)
-      );
-
-      if (!isAllowed) {
-        return {
-          eligible: false,
-          reason: `Department (${p.department}) not in eligible list (${job.eligibleDepartments}).`
-        };
-      }
-    }
-
-    // Batch Check
-    if (job.graduationYear && p.graduationYear !== job.graduationYear) {
-      return {
-        eligible: false,
-        reason: `Open for ${job.graduationYear} batch only (Your batch: ${p.graduationYear}).`
-      };
-    }
-
-    return { eligible: true, reason: "Eligible to apply" };
   };
 
   const handleApply = async () => {
@@ -148,33 +144,59 @@ export default function StudentJobsPage() {
     }
   };
 
-  const profile = student?.studentProfile;
+  const profile = student?.studentProfile || {
+    cgpa: 0,
+    department: "",
+    graduationYear: 2026,
+    skills: ""
+  };
 
-  const filteredJobs = jobs.filter((job) => {
-    const matchesSearch =
-      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.company?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.skills?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredJobs = jobs
+    .filter((job) => {
+      const matchesSearch =
+        job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.company?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.skills?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.location?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesDept =
-      deptFilter === "ALL" ||
-      job.eligibleDepartments === "ALL" ||
-      job.eligibleDepartments.toLowerCase().includes(deptFilter.toLowerCase());
+      const matchesDept =
+        deptFilter === "ALL" ||
+        job.eligibleDepartments === "ALL" ||
+        job.eligibleDepartments.toLowerCase().includes(deptFilter.toLowerCase());
 
-    const matchesType = typeFilter === "ALL" || job.jobType === typeFilter;
+      const matchesType = typeFilter === "ALL" || job.jobType === typeFilter;
 
-    const eligibility = checkEligibility(job);
-    const hasApplied = appliedJobIds.has(job.id);
+      const minCgpaNum = parseFloat(cgpaFilter);
+      const matchesCgpa = cgpaFilter === "ALL" || job.minCgpa <= minCgpaNum;
 
-    let matchesEligibility = true;
-    if (eligibilityFilter === "ELIGIBLE") {
-      matchesEligibility = eligibility.eligible && !hasApplied;
-    } else if (eligibilityFilter === "APPLIED") {
-      matchesEligibility = hasApplied;
-    }
+      const checklist = checkDetailedEligibility(profile, job);
+      const hasApplied = appliedJobIds.has(job.id);
+      const isBookmarked = bookmarkedJobIds.has(job.id);
 
-    return matchesSearch && matchesDept && matchesType && matchesEligibility;
-  });
+      let matchesStatus = true;
+      if (statusView === "ELIGIBLE") {
+        matchesStatus = checklist.isOverallEligible && !hasApplied;
+      } else if (statusView === "APPLIED") {
+        matchesStatus = hasApplied;
+      } else if (statusView === "BOOKMARKS") {
+        matchesStatus = isBookmarked;
+      }
+
+      return matchesSearch && matchesDept && matchesType && matchesCgpa && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sortBy === "salary_desc") {
+        const getVal = (s: string) => {
+          const m = s.match(/([0-9.]+)/);
+          return m ? parseFloat(m[1]) : 0;
+        };
+        return getVal(b.salary) - getVal(a.salary);
+      }
+      if (sortBy === "deadline") {
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
   return (
     <div className="space-y-6">
@@ -185,19 +207,22 @@ export default function StudentJobsPage() {
             {profile?.department ? profile.department[0] : "C"}
           </div>
           <div>
-            <div className="font-bold text-sm text-slate-900">
-              Automatic Eligibility Engine Active
+            <div className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+              <span>Automatic Eligibility Engine &amp; Smart Matching Active</span>
+              <Sparkles className="h-3.5 w-3.5 text-blue-600" />
             </div>
             <div className="text-xs text-slate-600">
-              Matching your records ({profile?.department || "Dept"}, CGPA: <strong>{profile?.cgpa?.toFixed(2) || "0.00"}</strong>, Batch {profile?.graduationYear || 2026}) against campus drive requirements.
+              Candidate: <strong>{profile.department || "Dept"}</strong> • CGPA: <strong>{profile.cgpa?.toFixed(2) || "0.00"}</strong> • Batch: <strong>{profile.graduationYear || 2026}</strong>
             </div>
           </div>
         </div>
-        <Link href="/student/profile">
-          <Button size="sm" variant="outline" className="text-xs bg-white text-blue-700 border-blue-200">
-            Edit Academic Details
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/student/profile">
+            <Button size="sm" variant="outline" className="text-xs bg-white text-blue-700 border-blue-200">
+              Profile &amp; Readiness Score
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -206,7 +231,7 @@ export default function StudentJobsPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Search by job title, company, or skills..."
+              placeholder="Search by job title, company, skills, or location..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 h-10"
@@ -233,26 +258,75 @@ export default function StudentJobsPage() {
               onChange={(e) => setTypeFilter(e.target.value)}
               className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="ALL">All Types</option>
+              <option value="ALL">All Job Types</option>
               <option value="Full-Time">Full-Time</option>
               <option value="Internship">Internship</option>
             </select>
 
             <select
-              value={eligibilityFilter}
-              onChange={(e) => setEligibilityFilter(e.target.value)}
+              value={cgpaFilter}
+              onChange={(e) => setCgpaFilter(e.target.value)}
               className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="ALL">All Opportunities</option>
-              <option value="ELIGIBLE">Eligible to Apply</option>
-              <option value="APPLIED">Already Applied</option>
+              <option value="ALL">Any CGPA Threshold</option>
+              <option value="6.5">Min CGPA ≤ 6.5</option>
+              <option value="7.5">Min CGPA ≤ 7.5</option>
+              <option value="8.0">Min CGPA ≤ 8.0</option>
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e: any) => setSortBy(e.target.value)}
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="newest">Sort: Newest First</option>
+              <option value="salary_desc">Sort: Highest Package</option>
+              <option value="deadline">Sort: Deadline Soonest</option>
             </select>
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-          <span>Found {filteredJobs.length} matching campus drives</span>
-          <span className="text-slate-400 text-[11px]">Submissions prevent duplicate entries automatically</span>
+        {/* Status view tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setStatusView("ALL")}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition ${
+                statusView === "ALL" ? "bg-slate-900 text-white font-semibold" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              All Campus Drives ({jobs.length})
+            </button>
+            <button
+              onClick={() => setStatusView("ELIGIBLE")}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition ${
+                statusView === "ELIGIBLE" ? "bg-blue-600 text-white font-semibold" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              Eligible to Apply
+            </button>
+            <button
+              onClick={() => setStatusView("APPLIED")}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition ${
+                statusView === "APPLIED" ? "bg-emerald-600 text-white font-semibold" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              Applied Drives ({appliedJobIds.size})
+            </button>
+            <button
+              onClick={() => setStatusView("BOOKMARKS")}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition flex items-center gap-1 ${
+                statusView === "BOOKMARKS" ? "bg-amber-600 text-white font-semibold" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <Bookmark className="h-3 w-3" />
+              <span>Saved Bookmarks ({bookmarkedJobIds.size})</span>
+            </button>
+          </div>
+
+          <span className="text-xs text-slate-500">
+            Showing {filteredJobs.length} opportunities
+          </span>
         </div>
       </div>
 
@@ -266,14 +340,16 @@ export default function StudentJobsPage() {
         <div className="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
           <Briefcase className="h-10 w-10 text-slate-300 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-slate-700">No matching campus drives found</h3>
-          <p className="text-xs text-slate-500 mt-1">Try resetting the department or status filters.</p>
+          <p className="text-xs text-slate-500 mt-1">Try resetting the department, status, or search filters.</p>
         </div>
       ) : (
         <div className="space-y-4">
           {filteredJobs.map((job) => {
-            const eligibility = checkEligibility(job);
+            const checklist = checkDetailedEligibility(profile, job);
+            const matchResult = calculateSmartMatch(profile, job);
             const hasApplied = appliedJobIds.has(job.id);
             const appliedStatus = appliedJobIds.get(job.id);
+            const isBookmarked = bookmarkedJobIds.has(job.id);
 
             return (
               <Card
@@ -281,7 +357,7 @@ export default function StudentJobsPage() {
                 className={`transition-all ${
                   hasApplied
                     ? "border-blue-200 bg-blue-50/20"
-                    : eligibility.eligible
+                    : checklist.isOverallEligible
                     ? "border-slate-200 hover:border-blue-300 hover:shadow-md"
                     : "border-slate-200/60 bg-slate-50/50 opacity-90"
                 }`}
@@ -291,16 +367,30 @@ export default function StudentJobsPage() {
                     {/* Left: Job Meta */}
                     <div className="space-y-2.5 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-bold text-slate-900 text-lg">{job.title}</span>
+                        <Link
+                          href={`/student/jobs/${job.id}`}
+                          className="font-bold text-slate-900 text-lg hover:text-blue-600 transition"
+                        >
+                          {job.title}
+                        </Link>
                         <Badge variant="outline" className="font-semibold text-slate-700 bg-white">
                           {job.company?.name}
                         </Badge>
                         <Badge variant={job.jobType === "Full-Time" ? "secondary" : "purple"}>
                           {job.jobType}
                         </Badge>
+
+                        {/* FEATURE 1: Smart Match Badge */}
+                        <Badge
+                          variant={matchResult.matchPercentage >= 75 ? "success" : "secondary"}
+                          className="text-[11px] font-bold gap-1"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          <span>{matchResult.matchPercentage}% Match</span>
+                        </Badge>
                       </div>
 
-                      <p className="text-xs text-slate-600 leading-relaxed max-w-3xl">
+                      <p className="text-xs text-slate-600 leading-relaxed max-w-3xl line-clamp-2">
                         {job.description}
                       </p>
 
@@ -335,8 +425,8 @@ export default function StudentJobsPage() {
                       )}
 
                       {/* Eligibility Banner */}
-                      <div className="pt-2">
-                        {eligibility.eligible ? (
+                      <div className="pt-1.5 flex items-center gap-2">
+                        {checklist.isOverallEligible ? (
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                             <span>Eligible to apply</span>
@@ -344,19 +434,34 @@ export default function StudentJobsPage() {
                         ) : (
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-50 border border-red-200 text-red-800 text-xs font-medium">
                             <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />
-                            <span>Not eligible: {eligibility.reason}</span>
+                            <span>
+                              Not eligible: {!checklist.cgpa.pass ? checklist.cgpa.message : !checklist.department.pass ? checklist.department.message : !checklist.deadline.pass ? "Application deadline has expired." : "Batch criteria not met."}
+                            </span>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Right Action Button */}
+                    {/* Right: Actions */}
                     <div className="flex flex-col sm:flex-row lg:flex-col items-stretch lg:items-end justify-between gap-3 border-t lg:border-t-0 pt-4 lg:pt-0 shrink-0">
-                      <div className="text-right text-xs text-slate-400 hidden lg:block">
-                        <div>Eligible Branches:</div>
-                        <div className="text-slate-700 font-medium text-[11px] max-w-[180px] truncate">
-                          {job.eligibleDepartments}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => handleToggleBookmark(job.id, e)}
+                          title={isBookmarked ? "Remove bookmark" : "Save job"}
+                          className={`p-2 rounded-lg border transition ${
+                            isBookmarked
+                              ? "bg-amber-50 border-amber-300 text-amber-600"
+                              : "bg-white border-slate-200 text-slate-400 hover:text-slate-700"
+                          }`}
+                        >
+                          <Bookmark className={`h-4 w-4 ${isBookmarked ? "fill-amber-500" : ""}`} />
+                        </button>
+
+                        <Link href={`/student/jobs/${job.id}`}>
+                          <Button variant="outline" size="sm" className="text-xs">
+                            Details
+                          </Button>
+                        </Link>
                       </div>
 
                       {hasApplied ? (
@@ -369,7 +474,7 @@ export default function StudentJobsPage() {
                             Status: {appliedStatus}
                           </span>
                         </div>
-                      ) : eligibility.eligible ? (
+                      ) : checklist.isOverallEligible ? (
                         <Button
                           onClick={() => setSelectedJobForApply(job)}
                           className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-xs gap-1.5 font-semibold shadow-sm"
@@ -412,7 +517,7 @@ export default function StudentJobsPage() {
                 Apply for {selectedJobForApply.title}
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Your academic credentials ({profile?.department}, CGPA {profile?.cgpa}) and uploaded resume will be submitted to the corporate recruitment team.
+                Your academic credentials ({profile?.department}, CGPA {profile?.cgpa}) and verified resume will be shared with the recruiter.
               </p>
             </div>
 
@@ -422,7 +527,7 @@ export default function StudentJobsPage() {
               </label>
               <textarea
                 rows={4}
-                placeholder="Highlight your relevant project experiences, tech stack expertise, or motivation..."
+                placeholder="Highlight your key projects, algorithmic abilities, or specific interest..."
                 value={coverNote}
                 onChange={(e) => setCoverNote(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"

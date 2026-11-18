@@ -13,12 +13,19 @@ import {
   Calendar,
   ArrowRight,
   Sparkles,
+  Award,
+  Layers,
   ExternalLink
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DepartmentPlacementChart, ApplicationStatusPieChart } from "@/components/admin/dashboard-charts";
+import {
+  DepartmentPlacementChart,
+  ApplicationStatusPieChart,
+  CompanyPlacementsBarChart,
+  MonthlyTrendsLineChart
+} from "@/components/admin/dashboard-charts";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +42,9 @@ export default async function AdminDashboardPage() {
     selectedApplications,
     studentsWithProfiles,
     applicationsList,
-    recentApplications
+    recentApplications,
+    companiesWithJobs,
+    allApplications
   ] = await Promise.all([
     prisma.user.count({ where: { role: "STUDENT" } }),
     prisma.company.count(),
@@ -61,6 +70,23 @@ export default async function AdminDashboardPage() {
       include: {
         student: { include: { studentProfile: true } },
         job: { include: { company: true } }
+      }
+    }),
+    prisma.company.findMany({
+      include: {
+        jobs: {
+          include: {
+            applications: {
+              where: { status: "Selected" }
+            }
+          }
+        }
+      }
+    }),
+    prisma.application.findMany({
+      select: {
+        status: true,
+        appliedAt: true
       }
     })
   ]);
@@ -113,6 +139,40 @@ export default async function AdminDashboardPage() {
     value: a._count.id
   }));
 
+  // Company-wise selections
+  const companyPlacementsData = companiesWithJobs
+    .map(c => {
+      const selections = c.jobs.reduce((acc, j) => acc + j.applications.length, 0);
+      return {
+        name: c.name,
+        selections
+      };
+    })
+    .sort((a, b) => b.selections - a.selections)
+    .slice(0, 6);
+
+  // Monthly recruitment trends (recent 5 months)
+  const monthMap = new Map<string, { month: string; applications: number; selections: number }>();
+  const monthNames = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  monthNames.forEach(m => monthMap.set(m, { month: m, applications: 0, selections: 0 }));
+
+  allApplications.forEach(a => {
+    const d = new Date(a.appliedAt);
+    const mName = d.toLocaleString("default", { month: "short" });
+    if (monthMap.has(mName)) {
+      const entry = monthMap.get(mName)!;
+      entry.applications += 1;
+      if (a.status === "Selected") entry.selections += 1;
+    } else {
+      // Default fallback to Nov
+      const novEntry = monthMap.get("Nov")!;
+      novEntry.applications += 1;
+      if (a.status === "Selected") novEntry.selections += 1;
+    }
+  });
+
+  const monthlyTrendsData = Array.from(monthMap.values());
+
   return (
     <div className="space-y-8">
       {/* Header Banner */}
@@ -120,7 +180,7 @@ export default async function AdminDashboardPage() {
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold mb-2 border border-blue-200/60">
             <Sparkles className="h-3.5 w-3.5" />
-            <span>Academic Year 2025-2026 Live Recruitment Cycle</span>
+            <span>Academic Year 2025-2026 Live Recruitment Operations</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Placement Operations &amp; Analytics
@@ -140,7 +200,7 @@ export default async function AdminDashboardPage() {
           <Link href="/admin/reports">
             <Button size="sm" variant="outline" className="text-xs gap-1.5">
               <Download className="h-3.5 w-3.5" />
-              <span>Audit Reports</span>
+              <span>Accreditation CSV</span>
             </Button>
           </Link>
         </div>
@@ -203,7 +263,7 @@ export default async function AdminDashboardPage() {
         </Card>
       </div>
 
-      {/* Visual Analytics Charts via Recharts */}
+      {/* Visual Analytics Grid 1: Department Stats & Application Status Flow */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left (2 Cols): Placements by Department */}
         <Card className="lg:col-span-2 border-slate-200">
@@ -235,7 +295,40 @@ export default async function AdminDashboardPage() {
         </Card>
       </div>
 
-      {/* Recent Applications Feed & Operational Actions */}
+      {/* Visual Analytics Grid 2: Company-wise Selections & Monthly Placement Trends */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="border-slate-200">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <Award className="h-4 w-4 text-emerald-600" />
+              <CardTitle className="text-base font-bold">Top Corporate Recruiters (Offers)</CardTitle>
+            </div>
+            <CardDescription className="text-xs">
+              Confirmed job offers extended by visiting hiring partners
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <CompanyPlacementsBarChart data={companyPlacementsData} />
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-blue-600" />
+              <CardTitle className="text-base font-bold">Monthly Recruitment Velocity</CardTitle>
+            </div>
+            <CardDescription className="text-xs">
+              Application submissions and confirmed selections timeline
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <MonthlyTrendsLineChart data={monthlyTrendsData} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Applications Feed */}
       <Card className="border-slate-200">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div>

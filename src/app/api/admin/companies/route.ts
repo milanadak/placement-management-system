@@ -63,6 +63,41 @@ export async function POST(req: Request) {
   }
 }
 
+export async function PUT(req: Request) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser || sessionUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json();
+    const { id, ...rest } = body;
+    if (!id) return NextResponse.json({ error: "Company ID is required" }, { status: 400 });
+
+    const result = CompanySchema.safeParse(rest);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.errors[0]?.message || "Invalid input" }, { status: 400 });
+    }
+
+    const company = await prisma.company.update({
+      where: { id },
+      data: {
+        name: result.data.name,
+        website: result.data.website || null,
+        description: result.data.description,
+        location: result.data.location,
+        industry: result.data.industry,
+        contactEmail: result.data.contactEmail || null
+      }
+    });
+
+    return NextResponse.json({ success: true, company });
+  } catch (error: any) {
+    console.error("Update company error:", error);
+    return NextResponse.json({ error: "Failed to update company" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   const sessionUser = await getSessionUser();
   if (!sessionUser || sessionUser.role !== "ADMIN") {

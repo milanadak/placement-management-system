@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Plus, Trash2, Calendar, Send, Loader2 } from "lucide-react";
+import { Bell, Plus, Trash2, Edit2, Calendar, Send, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ export default function AdminAnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editAnnouncement, setEditAnnouncement] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
@@ -61,6 +62,40 @@ export default function AdminAnnouncementsPage() {
     }
   };
 
+  const handleEditOpen = (an: any) => {
+    setEditAnnouncement(an);
+    setForm({
+      title: an.title,
+      content: an.content,
+      priority: an.priority,
+      targetDept: an.targetDept
+    });
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editAnnouncement) return;
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/announcements", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editAnnouncement.id, ...form })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+
+      toast.success("Notice updated successfully!");
+      setEditAnnouncement(null);
+      fetchAnnouncements();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update notice.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this notice?")) return;
     try {
@@ -86,7 +121,11 @@ export default function AdminAnnouncementsPage() {
         </div>
 
         <Button
-          onClick={() => setIsAddOpen(true)}
+          onClick={() => {
+            setEditAnnouncement(null);
+            setForm({ title: "", content: "", priority: "MEDIUM", targetDept: "ALL" });
+            setIsAddOpen(true);
+          }}
           className="bg-blue-600 hover:bg-blue-700 text-xs gap-1.5 h-9"
         >
           <Plus className="h-4 w-4" />
@@ -134,14 +173,24 @@ export default function AdminAnnouncementsPage() {
                     </p>
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(item.id)}
-                    className="text-red-600 hover:bg-red-50 hover:text-red-700 h-8 px-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditOpen(item)}
+                      className="text-slate-600 hover:bg-slate-100 h-8 px-2"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(item.id)}
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700 h-8 px-2"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -149,23 +198,28 @@ export default function AdminAnnouncementsPage() {
         </div>
       )}
 
-      {/* Publish Notice Modal */}
-      {isAddOpen && (
+      {/* Publish / Edit Notice Modal */}
+      {(isAddOpen || editAnnouncement) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-base text-slate-900">Broadcast Campus Notice</h3>
+              <h3 className="font-bold text-base text-slate-900">
+                {editAnnouncement ? "Edit Campus Notice" : "Broadcast Campus Notice"}
+              </h3>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsAddOpen(false)}
+                onClick={() => {
+                  setIsAddOpen(false);
+                  setEditAnnouncement(null);
+                }}
                 className="h-7 w-7 p-0"
               >
                 ✕
               </Button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-3 text-xs">
+            <form onSubmit={editAnnouncement ? handleUpdate : handleCreate} className="space-y-3 text-xs">
               <div className="space-y-1">
                 <Label htmlFor="atitle">Announcement Headline *</Label>
                 <Input
@@ -229,7 +283,10 @@ export default function AdminAnnouncementsPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsAddOpen(false)}
+                  onClick={() => {
+                    setIsAddOpen(false);
+                    setEditAnnouncement(null);
+                  }}
                 >
                   Cancel
                 </Button>
@@ -240,7 +297,7 @@ export default function AdminAnnouncementsPage() {
                   className="bg-blue-600 hover:bg-blue-700 gap-1.5"
                 >
                   {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  <span>Broadcast Notice</span>
+                  <span>{editAnnouncement ? "Save Changes" : "Broadcast Notice"}</span>
                 </Button>
               </div>
             </form>

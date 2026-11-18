@@ -11,10 +11,12 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
+  LineChart,
+  Line
 } from "recharts";
 
-const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#64748b"];
+const COLORS = ["#2563eb", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4"];
 
 export function DepartmentPlacementChart({ data }: { data: any[] }) {
   return (
@@ -45,8 +47,8 @@ export function ApplicationStatusPieChart({ data }: { data: any[] }) {
             data={data}
             cx="50%"
             cy="50%"
-            innerRadius={60}
-            outerRadius={85}
+            innerRadius={55}
+            outerRadius={80}
             paddingAngle={4}
             dataKey="value"
           >
@@ -62,9 +64,48 @@ export function ApplicationStatusPieChart({ data }: { data: any[] }) {
             verticalAlign="bottom"
             height={36}
             iconType="circle"
-            formatter={(value) => <span className="text-xs text-slate-600">{value}</span>}
+            formatter={(value) => <span className="text-[11px] text-slate-600 font-medium">{value}</span>}
           />
         </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function CompanyPlacementsBarChart({ data }: { data: any[] }) {
+  return (
+    <div className="h-64 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart layout="vertical" data={data} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+          <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#334155" }} width={80} tickLine={false} />
+          <Tooltip
+            contentStyle={{ backgroundColor: "#0f172a", borderRadius: "8px", color: "#fff", fontSize: "12px" }}
+            itemStyle={{ color: "#fff" }}
+          />
+          <Bar dataKey="selections" name="Offers Extended" fill="#10b981" radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function MonthlyTrendsLineChart({ data }: { data: any[] }) {
+  return (
+    <div className="h-64 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+          <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: "#64748b" }} tickLine={false} />
+          <Tooltip
+            contentStyle={{ backgroundColor: "#0f172a", borderRadius: "8px", color: "#fff", fontSize: "12px" }}
+            itemStyle={{ color: "#fff" }}
+          />
+          <Line type="monotone" dataKey="applications" name="Applications" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="selections" name="Selections" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );

@@ -41,6 +41,38 @@ export async function POST(req: Request) {
   }
 }
 
+export async function PUT(req: Request) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser || sessionUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json();
+    const { id, ...rest } = body;
+    if (!id) return NextResponse.json({ error: "Missing announcement ID" }, { status: 400 });
+
+    const result = AnnouncementSchema.safeParse(rest);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.errors[0]?.message || "Invalid input" }, { status: 400 });
+    }
+
+    const updated = await prisma.announcement.update({
+      where: { id },
+      data: {
+        title: result.data.title,
+        content: result.data.content,
+        priority: result.data.priority,
+        targetDept: result.data.targetDept
+      }
+    });
+
+    return NextResponse.json({ success: true, announcement: updated });
+  } catch (error: any) {
+    return NextResponse.json({ error: "Failed to update announcement" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   const sessionUser = await getSessionUser();
   if (!sessionUser || sessionUser.role !== "ADMIN") {

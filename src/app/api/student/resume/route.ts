@@ -67,3 +67,50 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to upload resume." }, { status: 500 });
   }
 }
+
+export async function DELETE() {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser || sessionUser.role !== "STUDENT") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const profile = await prisma.studentProfile.findUnique({
+      where: { userId: sessionUser.id }
+    });
+
+    if (!profile || !profile.resumeUrl) {
+      return NextResponse.json({ error: "No resume found to delete." }, { status: 404 });
+    }
+
+    // Safely remove the physical file if it starts with /uploads/resumes/
+    if (profile.resumeUrl.startsWith("/uploads/resumes/")) {
+      const filename = path.basename(profile.resumeUrl);
+      const filePath = path.join(process.cwd(), "public", "uploads", "resumes", filename);
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch {
+          // If file is missing or in use, continue clearing DB reference
+        }
+      }
+    }
+
+    const updatedProfile = await prisma.studentProfile.update({
+      where: { userId: sessionUser.id },
+      data: {
+        resumeUrl: null,
+        resumeName: null
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Resume removed successfully.",
+      profile: updatedProfile
+    });
+  } catch (error: any) {
+    console.error("Resume delete error:", error);
+    return NextResponse.json({ error: "Failed to delete resume." }, { status: 500 });
+  }
+}

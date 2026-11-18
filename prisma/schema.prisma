@@ -20,6 +20,7 @@ model User {
   applications   Application[]
   notifications  Notification[]
   announcements  Announcement[]
+  bookmarks      JobBookmark[]
 
   @@index([email])
 }
@@ -81,6 +82,7 @@ model Job {
   updatedAt           DateTime      @updatedAt
 
   applications        Application[]
+  bookmarks           JobBookmark[]
 
   @@index([companyId])
   @@index([isActive])
@@ -103,6 +105,19 @@ model Application {
   @@index([studentId])
   @@index([jobId])
   @@index([status])
+}
+
+model JobBookmark {
+  id        String   @id @default(cuid())
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, jobId])
+  @@index([studentId])
+  @@index([jobId])
 }
 
 model Interview {

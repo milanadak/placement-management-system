@@ -31,6 +31,7 @@ export default function StudentLayout({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [studentUser, setStudentUser] = useState<any>(null);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -41,7 +42,16 @@ export default function StudentLayout({
         }
       })
       .catch(() => {});
-  }, []);
+
+    fetch("/api/student/notifications")
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data?.unreadCount === "number") {
+          setUnreadNotifications(data.unreadCount);
+        }
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   const handleLogout = async () => {
     try {
@@ -59,7 +69,8 @@ export default function StudentLayout({
     { name: "Explore Jobs", href: "/student/jobs", icon: Briefcase },
     { name: "My Applications", href: "/student/applications", icon: FileCheck },
     { name: "Interview Schedule", href: "/student/interviews", icon: Calendar },
-    { name: "Announcements", href: "/student/announcements", icon: Bell },
+    { name: "Notifications", href: "/student/notifications", icon: Bell, badge: unreadNotifications },
+    { name: "Announcements", href: "/student/announcements", icon: Sparkles },
     { name: "My Profile", href: "/student/profile", icon: User },
   ];
 
@@ -129,14 +140,21 @@ export default function StudentLayout({
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                   isActive
                     ? "bg-blue-600 text-white shadow-sm font-semibold"
                     : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
                 }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-slate-400"}`} />
-                <span>{item.name}</span>
+                <div className="flex items-center gap-3">
+                  <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-slate-400"}`} />
+                  <span>{item.name}</span>
+                </div>
+                {item.badge && item.badge > 0 ? (
+                  <span className="h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {item.badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -173,10 +191,12 @@ export default function StudentLayout({
           </div>
 
           <div className="flex items-center gap-3">
-            <Link href="/student/announcements">
+            <Link href="/student/notifications">
               <Button variant="ghost" size="icon" className="relative text-slate-600 hover:text-slate-900">
                 <Bell className="h-4 w-4" />
-                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
+                {unreadNotifications > 0 && (
+                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-600 animate-pulse" />
+                )}
               </Button>
             </Link>
             <Link href="/student/profile">

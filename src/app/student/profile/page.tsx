@@ -1,18 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, Mail, Award, BookOpen, Calendar, Phone, Code2, FileText, Upload, CheckCircle2, AlertCircle, Loader2, Download } from "lucide-react";
+import {
+  User,
+  Mail,
+  Award,
+  BookOpen,
+  Calendar,
+  Phone,
+  Code2,
+  FileText,
+  Upload,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Download,
+  Trash2,
+  Sparkles,
+  TrendingUp,
+  Target
+} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { calculateReadinessScore } from "@/lib/matching";
 
 export default function StudentProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingResume, setUploadingResume] = useState(false);
+  const [deletingResume, setDeletingResume] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
 
@@ -111,14 +131,34 @@ export default function StudentProfilePage() {
     }
   };
 
-  // Completion calculation
+  const handleDeleteResume = async () => {
+    if (!confirm("Are you sure you want to delete your uploaded resume?")) return;
+
+    setDeletingResume(true);
+    try {
+      const res = await fetch("/api/student/resume", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete resume");
+
+      toast.success("Resume deleted from student record.");
+      fetchProfile();
+    } catch (err: any) {
+      toast.error(err.message || "Could not delete resume.");
+    } finally {
+      setDeletingResume(false);
+    }
+  };
+
   const profile = userData?.studentProfile;
-  let completion = 0;
-  if (form.rollNo) completion += 20;
-  if (form.department) completion += 20;
-  if (form.cgpa > 0) completion += 20;
-  if (form.skills && form.skills.length > 3) completion += 20;
-  if (profile?.resumeUrl) completion += 20;
+  const readiness = calculateReadinessScore({
+    cgpa: form.cgpa,
+    department: form.department,
+    graduationYear: form.graduationYear,
+    skills: form.skills,
+    resumeUrl: profile?.resumeUrl,
+    bio: form.bio,
+    phone: form.phone
+  });
 
   if (loading) {
     return (
@@ -130,22 +170,80 @@ export default function StudentProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* Profile Header */}
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Student Profile</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Student Profile &amp; Readiness</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Manage your verified academic records, resume, and skills for automated campus eligibility.
+            Maintain your academic credentials, verified resume, and review your placement readiness score.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500">Profile Completion:</span>
-          <Badge variant={completion === 100 ? "success" : "warning"} className="font-bold">
-            {completion}%
+          <Badge
+            variant={readiness.score >= 80 ? "success" : readiness.score >= 60 ? "info" : "warning"}
+            className="text-xs font-bold gap-1 px-3 py-1"
+          >
+            <Sparkles className="h-3 w-3" />
+            <span>Readiness Score: {readiness.score}/100 ({readiness.tier})</span>
           </Badge>
         </div>
       </div>
+
+      {/* FEATURE 2: Placement Readiness Score Banner */}
+      <Card className="border-blue-200 bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-white">
+        <CardContent className="p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2 flex-1">
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-blue-600" />
+                <h3 className="font-bold text-base text-slate-900">
+                  Placement Readiness Index: <span className="text-blue-600">{readiness.score} / 100</span>
+                </h3>
+                <Badge variant={readiness.score >= 80 ? "success" : "purple"} className="text-xs">
+                  {readiness.tier}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1">
+                <div>
+                  <span className="text-slate-500 text-[11px]">Academic CGPA</span>
+                  <div className="font-bold text-slate-900">{readiness.breakdown.academics} / 25 pts</div>
+                </div>
+                <div>
+                  <span className="text-slate-500 text-[11px]">Resume Verified</span>
+                  <div className="font-bold text-slate-900">{readiness.breakdown.resume} / 25 pts</div>
+                </div>
+                <div>
+                  <span className="text-slate-500 text-[11px]">Technical Skills</span>
+                  <div className="font-bold text-slate-900">{readiness.breakdown.skills} / 25 pts</div>
+                </div>
+                <div>
+                  <span className="text-slate-500 text-[11px]">Contact &amp; Bio</span>
+                  <div className="font-bold text-slate-900">{readiness.breakdown.profile} / 25 pts</div>
+                </div>
+              </div>
+
+              {readiness.suggestions.length > 0 && (
+                <div className="pt-2 text-xs text-slate-600 space-y-1">
+                  <span className="font-semibold text-slate-800 text-[11px]">Actionable Steps to Reach 100%:</span>
+                  <ul className="list-disc pl-4 space-y-0.5 text-[11px] text-blue-800">
+                    {readiness.suggestions.map((s, idx) => (
+                      <li key={idx}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="text-center shrink-0">
+              <div className="inline-flex h-20 w-20 rounded-full border-4 border-blue-600 items-center justify-center font-extrabold text-2xl text-blue-700 bg-white shadow-sm">
+                {readiness.score}%
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Side: Academic summary card & Resume upload */}
@@ -153,33 +251,33 @@ export default function StudentProfilePage() {
           {/* Card: Student Identity */}
           <Card className="border-slate-200">
             <CardHeader className="text-center pb-2">
-              <div className="h-20 w-20 rounded-full bg-blue-100 text-blue-700 font-extrabold text-2xl flex items-center justify-center mx-auto mb-2 border-2 border-blue-200 shadow-xs">
+              <div className="h-16 w-16 rounded-full bg-blue-100 text-blue-700 font-extrabold text-xl flex items-center justify-center mx-auto mb-2 border-2 border-blue-200 shadow-xs">
                 {form.name ? form.name[0] : "S"}
               </div>
               <CardTitle className="text-base">{form.name}</CardTitle>
               <CardDescription className="text-xs font-mono">{form.rollNo}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 pt-2 text-xs text-slate-600">
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
+            <CardContent className="space-y-2.5 pt-2 text-xs text-slate-600">
+              <div className="flex justify-between py-1 border-b border-slate-100">
                 <span className="text-slate-400">Department</span>
                 <span className="font-semibold text-slate-800">{form.department}</span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="text-slate-400">CGPA</span>
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-400">Current CGPA</span>
                 <span className="font-bold text-emerald-600">{Number(form.cgpa).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="text-slate-400">Graduation Year</span>
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-400">Batch Year</span>
                 <span className="font-semibold text-slate-800">{form.graduationYear}</span>
               </div>
-              <div className="flex justify-between py-1.5">
+              <div className="flex justify-between py-1">
                 <span className="text-slate-400">Email</span>
                 <span className="font-medium text-slate-800 truncate max-w-[140px]">{form.email}</span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card: Resume Upload */}
+          {/* Card: Resume Upload & Management */}
           <Card className="border-slate-200">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
@@ -192,25 +290,39 @@ export default function StudentProfilePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {profile?.resumeUrl ? (
-                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2.5">
                   <div className="flex items-center gap-2 text-emerald-800 text-xs font-semibold">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span className="truncate">{profile.resumeName || "Resume.pdf"}</span>
                   </div>
-                  <a
-                    href={profile.resumeUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900"
-                  >
-                    <Download className="h-3 w-3" />
-                    <span>View Uploaded File</span>
-                  </a>
+                  <div className="flex items-center justify-between pt-1 border-t border-emerald-200/60">
+                    <a
+                      href={profile.resumeUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900"
+                    >
+                      <Download className="h-3 w-3" />
+                      <span>Download</span>
+                    </a>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={deletingResume}
+                      onClick={handleDeleteResume}
+                      className="h-6 text-[11px] text-red-600 hover:text-red-700 hover:bg-red-100/50 p-1"
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      <span>Delete File</span>
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>No resume attached yet.</span>
+                  <span>No verified resume attached.</span>
                 </div>
               )}
 
@@ -235,7 +347,7 @@ export default function StudentProfilePage() {
                   ) : (
                     <>
                       <Upload className="h-3.5 w-3.5" />
-                      Upload New Resume
+                      Upload / Replace Resume
                     </>
                   )}
                 </Button>
@@ -244,17 +356,17 @@ export default function StudentProfilePage() {
           </Card>
         </div>
 
-        {/* Right Side (2 Cols): Edit Academic and Profile Details */}
+        {/* Right Side (2 Cols): Edit Academic Credentials */}
         <div className="md:col-span-2">
           <Card className="border-slate-200">
             <CardHeader>
-              <CardTitle className="text-base font-bold">Edit Academic Credentials</CardTitle>
+              <CardTitle className="text-base font-bold">Edit Academic Profile</CardTitle>
               <CardDescription className="text-xs">
-                Accurate information ensures automated eligibility matching during company drives.
+                Accurate information ensures automated eligibility matching during campus recruitment.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleProfileSubmit} className="space-y-4">
+              <form onSubmit={handleProfileSubmit} className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="name">Full Name *</Label>
@@ -279,7 +391,7 @@ export default function StudentProfilePage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="rollNo">Roll Number (Unique ID)</Label>
+                    <Label htmlFor="rollNo">University Roll Number (Unique ID)</Label>
                     <Input
                       id="rollNo"
                       disabled
@@ -333,7 +445,7 @@ export default function StudentProfilePage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="cgpa">Current CGPA (0 - 10) *</Label>
+                    <Label htmlFor="cgpa">Current Cumulative CGPA (0 - 10) *</Label>
                     <Input
                       id="cgpa"
                       type="number"
@@ -366,11 +478,11 @@ export default function StudentProfilePage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="bio">Professional Bio / Career Summary</Label>
+                  <Label htmlFor="bio">Professional Bio &amp; Career Summary</Label>
                   <textarea
                     id="bio"
                     rows={3}
-                    placeholder="Briefly state your technical aspirations and domain focus..."
+                    placeholder="Briefly state your technical aspirations, domain focus, and key project outcomes..."
                     value={form.bio}
                     onChange={(e) => setForm({ ...form, bio: e.target.value })}
                     className="w-full rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -381,7 +493,7 @@ export default function StudentProfilePage() {
                   <Button
                     type="submit"
                     disabled={saving}
-                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 gap-2"
+                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 gap-2 h-10 px-6 font-semibold"
                   >
                     {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                     <span>Save Changes</span>

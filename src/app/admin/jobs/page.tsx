@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Briefcase, Plus, Trash2, Calendar, MapPin, Building2, Users, Loader2 } from "lucide-react";
+import { Briefcase, Plus, Trash2, Edit2, Calendar, MapPin, Building2, Users, Loader2, Power } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,9 @@ export default function AdminJobsPage() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editJob, setEditJob] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     companyId: "",
@@ -84,6 +86,68 @@ export default function AdminJobsPage() {
     }
   };
 
+  const handleEditOpen = (job: any) => {
+    setEditJob(job);
+    setForm({
+      companyId: job.companyId,
+      title: job.title,
+      description: job.description,
+      minCgpa: job.minCgpa,
+      eligibleDepartments: job.eligibleDepartments,
+      graduationYear: job.graduationYear,
+      skills: job.skills,
+      jobType: job.jobType,
+      location: job.location,
+      salary: job.salary,
+      deadline: new Date(job.deadline).toISOString().slice(0, 10),
+    });
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editJob) return;
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/jobs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editJob.id, ...form })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+
+      toast.success(`Job opening "${form.title}" updated successfully!`);
+      setEditJob(null);
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update job.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleToggleActive = async (job: any) => {
+    setTogglingId(job.id);
+    const newStatus = !job.isActive;
+    try {
+      const res = await fetch("/api/admin/jobs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: job.id, isActive: newStatus })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error("Toggle status failed");
+
+      toast.success(`Drive "${job.title}" is now ${newStatus ? "Active" : "Closed / Inactive"}.`);
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, isActive: newStatus } : j));
+    } catch {
+      toast.error("Could not update drive status.");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`Are you sure you want to delete ${title}?`)) return;
 
@@ -111,7 +175,10 @@ export default function AdminJobsPage() {
         </div>
 
         <Button
-          onClick={() => setIsAddOpen(true)}
+          onClick={() => {
+            setEditJob(null);
+            setIsAddOpen(true);
+          }}
           className="bg-blue-600 hover:bg-blue-700 text-xs gap-1.5 h-9"
         >
           <Plus className="h-4 w-4" />
@@ -138,6 +205,9 @@ export default function AdminJobsPage() {
                       </Badge>
                       <Badge variant={job.jobType === "Full-Time" ? "secondary" : "purple"}>
                         {job.jobType}
+                      </Badge>
+                      <Badge variant={job.isActive ? "success" : "destructive"} className="text-[10px]">
+                        {job.isActive ? "Active Drive" : "Closed / Inactive"}
                       </Badge>
                     </div>
 
@@ -172,13 +242,33 @@ export default function AdminJobsPage() {
 
                   <div className="flex items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0">
                     <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={togglingId === job.id}
+                      onClick={() => handleToggleActive(job)}
+                      className={`text-xs h-8 gap-1 ${job.isActive ? "border-amber-300 text-amber-800" : "border-emerald-300 text-emerald-800"}`}
+                    >
+                      <Power className="h-3 w-3" />
+                      <span>{job.isActive ? "Deactivate" : "Activate"}</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditOpen(job)}
+                      className="text-slate-700 hover:bg-slate-100 text-xs h-8 gap-1"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                      <span>Edit</span>
+                    </Button>
+
+                    <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDelete(job.id, job.title)}
-                      className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs gap-1"
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700 text-xs h-8 px-2"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      <span>Delete</span>
                     </Button>
                   </div>
                 </div>
@@ -188,23 +278,28 @@ export default function AdminJobsPage() {
         </div>
       )}
 
-      {/* Post Job Modal */}
-      {isAddOpen && (
+      {/* Post / Edit Job Modal */}
+      {(isAddOpen || editJob) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-base text-slate-900">Post New Campus Drive</h3>
+              <h3 className="font-bold text-base text-slate-900">
+                {editJob ? `Edit Placement Drive: ${editJob.title}` : "Post New Campus Drive"}
+              </h3>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsAddOpen(false)}
+                onClick={() => {
+                  setIsAddOpen(false);
+                  setEditJob(null);
+                }}
                 className="h-7 w-7 p-0"
               >
                 ✕
               </Button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-3 text-xs">
+            <form onSubmit={editJob ? handleUpdate : handleCreate} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="jcompany">Recruiter Partner *</Label>
@@ -331,7 +426,10 @@ export default function AdminJobsPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsAddOpen(false)}
+                  onClick={() => {
+                    setIsAddOpen(false);
+                    setEditJob(null);
+                  }}
                 >
                   Cancel
                 </Button>
@@ -342,7 +440,7 @@ export default function AdminJobsPage() {
                   className="bg-blue-600 hover:bg-blue-700 gap-1.5"
                 >
                   {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  <span>Publish Campus Drive</span>
+                  <span>{editJob ? "Save Changes" : "Publish Campus Drive"}</span>
                 </Button>
               </div>
             </form>

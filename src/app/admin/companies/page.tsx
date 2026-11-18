@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Building2, Plus, Trash2, ExternalLink, Globe, MapPin, Mail, Briefcase, Loader2, AlertCircle } from "lucide-react";
+import { Building2, Plus, Trash2, Edit2, ExternalLink, Globe, MapPin, Mail, Briefcase, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ export default function AdminCompaniesPage() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editCompany, setEditCompany] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
@@ -72,6 +73,42 @@ export default function AdminCompaniesPage() {
     }
   };
 
+  const handleEditOpen = (c: any) => {
+    setEditCompany(c);
+    setForm({
+      name: c.name || "",
+      website: c.website || "",
+      industry: c.industry || "Information Technology",
+      location: c.location || "",
+      description: c.description || "",
+      contactEmail: c.contactEmail || ""
+    });
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCompany) return;
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/companies", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editCompany.id, ...form })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+
+      toast.success(`${form.name} updated successfully!`);
+      setEditCompany(null);
+      fetchCompanies();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update company.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to remove ${name}? Associated jobs and applications will also be affected.`)) {
       return;
@@ -96,12 +133,22 @@ export default function AdminCompaniesPage() {
             Corporate Recruitment Partners
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Manage visiting companies, recruiter contacts, and campus drive partnerships.
+            Manage visiting companies, corporate recruiter contacts, and campus drive partnerships.
           </p>
         </div>
 
         <Button
-          onClick={() => setIsAddOpen(true)}
+          onClick={() => {
+            setForm({
+              name: "",
+              website: "",
+              industry: "Information Technology",
+              location: "Bengaluru",
+              description: "",
+              contactEmail: ""
+            });
+            setIsAddOpen(true);
+          }}
           className="bg-blue-600 hover:bg-blue-700 text-xs gap-1.5 h-9"
         >
           <Plus className="h-4 w-4" />
@@ -167,14 +214,24 @@ export default function AdminCompaniesPage() {
                     </a>
                   ) : <span />}
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(c.id, c.name)}
-                    className="h-8 px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditOpen(c)}
+                      className="h-8 px-2 text-slate-600 hover:bg-slate-100"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(c.id, c.name)}
+                      className="h-8 px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -182,23 +239,28 @@ export default function AdminCompaniesPage() {
         </div>
       )}
 
-      {/* Add Company Modal */}
-      {isAddOpen && (
+      {/* Add / Edit Company Modal */}
+      {(isAddOpen || editCompany) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-base text-slate-900">Add Corporate Recruiter</h3>
+              <h3 className="font-bold text-base text-slate-900">
+                {editCompany ? `Edit Recruiter: ${editCompany.name}` : "Add Corporate Recruiter"}
+              </h3>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsAddOpen(false)}
+                onClick={() => {
+                  setIsAddOpen(false);
+                  setEditCompany(null);
+                }}
                 className="h-7 w-7 p-0"
               >
                 ✕
               </Button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-3 text-xs">
+            <form onSubmit={editCompany ? handleUpdate : handleCreate} className="space-y-3 text-xs">
               <div className="space-y-1">
                 <Label htmlFor="cname">Company Name *</Label>
                 <Input
@@ -274,7 +336,10 @@ export default function AdminCompaniesPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsAddOpen(false)}
+                  onClick={() => {
+                    setIsAddOpen(false);
+                    setEditCompany(null);
+                  }}
                 >
                   Cancel
                 </Button>
@@ -285,7 +350,7 @@ export default function AdminCompaniesPage() {
                   className="bg-blue-600 hover:bg-blue-700 gap-1.5"
                 >
                   {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  <span>Save Recruiter</span>
+                  <span>{editCompany ? "Save Changes" : "Save Recruiter"}</span>
                 </Button>
               </div>
             </form>

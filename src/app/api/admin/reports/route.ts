@@ -9,8 +9,10 @@ export async function GET(req: Request) {
   }
 
   const { searchParams } = new URL(req.url);
-  const type = searchParams.get("type") || "students"; // "students" | "applications"
+  const type = searchParams.get("type") || "students";
+  const dateStr = new Date().toISOString().slice(0, 10);
 
+  // 1. Students Master Report
   if (type === "students") {
     const students = await prisma.user.findMany({
       where: { role: "STUDENT" },
@@ -39,16 +41,15 @@ export async function GET(req: Request) {
       ].join(",");
     });
 
-    const csvContent = [headers.join(","), ...rows].join("\n");
-
-    return new NextResponse(csvContent, {
+    return new NextResponse([headers.join(","), ...rows].join("\n"), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="CampusConnect_Students_Report_${new Date().toISOString().slice(0, 10)}.csv"`
+        "Content-Disposition": `attachment; filename="CampusConnect_Students_Census_${dateStr}.csv"`
       }
     });
   }
 
+  // 2. Applications Audit Report
   if (type === "applications") {
     const applications = await prisma.application.findMany({
       include: {
@@ -74,12 +75,121 @@ export async function GET(req: Request) {
       ].join(",");
     });
 
-    const csvContent = [headers.join(","), ...rows].join("\n");
-
-    return new NextResponse(csvContent, {
+    return new NextResponse([headers.join(","), ...rows].join("\n"), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="CampusConnect_Placements_Audit_${new Date().toISOString().slice(0, 10)}.csv"`
+        "Content-Disposition": `attachment; filename="CampusConnect_Placements_Audit_${dateStr}.csv"`
+      }
+    });
+  }
+
+  // 3. Campus Drives / Jobs Catalog
+  if (type === "jobs") {
+    const jobs = await prisma.job.findMany({
+      include: {
+        company: true,
+        applications: true
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    const headers = ["Job ID", "Company", "Job Title", "Type", "Package", "Min CGPA", "Eligible Branches", "Location", "Deadline", "Total Applicants", "Status"];
+    const rows = jobs.map((j) => {
+      return [
+        `"${j.id}"`,
+        `"${j.company.name}"`,
+        `"${j.title}"`,
+        `"${j.jobType}"`,
+        `"${j.salary}"`,
+        j.minCgpa.toFixed(1),
+        `"${j.eligibleDepartments.replace(/"/g, '""')}"`,
+        `"${j.location}"`,
+        new Date(j.deadline).toISOString().slice(0, 10),
+        j.applications.length,
+        j.isActive ? "Active" : "Closed"
+      ].join(",");
+    });
+
+    return new NextResponse([headers.join(","), ...rows].join("\n"), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="CampusConnect_Drives_Catalog_${dateStr}.csv"`
+      }
+    });
+  }
+
+  // 4. Placed Candidates Honor Roll
+  if (type === "placed") {
+    const placedApps = await prisma.application.findMany({
+      where: { status: "Selected" },
+      include: {
+        student: { include: { studentProfile: true } },
+        job: { include: { company: true } }
+      },
+      orderBy: { appliedAt: "desc" }
+    });
+
+    const headers = ["Student Name", "Roll Number", "Department", "Graduation Year", "CGPA", "Hiring Company", "Designation", "Package Offered", "Selection Date"];
+    const rows = placedApps.map((a) => {
+      const p = a.student.studentProfile;
+      return [
+        `"${a.student.name}"`,
+        `"${p?.rollNo || "N/A"}"`,
+        `"${p?.department || "N/A"}"`,
+        p?.graduationYear || 2026,
+        p?.cgpa?.toFixed(2) || "0.00",
+        `"${a.job.company.name}"`,
+        `"${a.job.title}"`,
+        `"${a.job.salary}"`,
+        new Date(a.updatedAt).toISOString().slice(0, 10)
+      ].join(",");
+    });
+
+    return new NextResponse([headers.join(","), ...rows].join("\n"), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="CampusConnect_Placed_Honor_Roll_${dateStr}.csv"`
+      }
+    });
+  }
+
+  // 5. Department-wise Summary
+  if (type === "departments") {
+    const students = await prisma.studentProfile.findMany({
+      include: {
+        user: {
+          include: {
+            applications: {
+              where: { status: "Selected" }
+            }
+          }
+        }
+      }
+    });
+
+    const summary: Record<string, { total: number; placed: number }> = {};
+    students.forEach((s) => {
+      const d = s.department || "Other";
+      if (!summary[d]) summary[d] = { total: 0, placed: 0 };
+      summary[d].total += 1;
+      if (s.user.applications.length > 0) summary[d].placed += 1;
+    });
+
+    const headers = ["Department", "Total Students", "Placed Students", "Placement Percentage"];
+    const rows = Object.entries(summary).map(([dept, data]) => {
+      const rate = data.total > 0 ? ((data.placed / data.total) * 100).toFixed(1) : "0.0";
+      return [
+        `"${dept}"`,
+        data.total,
+        data.placed,
+        `"${rate}%"`
+      ].join(",");
+    });
+
+    return new NextResponse([headers.join(","), ...rows].join("\n"), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="CampusConnect_Branchwise_Summary_${dateStr}.csv"`
       }
     });
   }

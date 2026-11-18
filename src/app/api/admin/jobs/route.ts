@@ -84,6 +84,71 @@ export async function POST(req: Request) {
   }
 }
 
+export async function PUT(req: Request) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser || sessionUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await req.json();
+    const { id, ...rest } = body;
+    if (!id) return NextResponse.json({ error: "Job ID required" }, { status: 400 });
+
+    const result = JobSchema.safeParse(rest);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.errors[0]?.message || "Invalid input" }, { status: 400 });
+    }
+
+    const job = await prisma.job.update({
+      where: { id },
+      data: {
+        companyId: result.data.companyId,
+        title: result.data.title,
+        description: result.data.description,
+        minCgpa: result.data.minCgpa,
+        eligibleDepartments: result.data.eligibleDepartments,
+        graduationYear: result.data.graduationYear,
+        skills: result.data.skills,
+        jobType: result.data.jobType,
+        location: result.data.location,
+        salary: result.data.salary,
+        deadline: new Date(result.data.deadline),
+      },
+      include: { company: true }
+    });
+
+    return NextResponse.json({ success: true, job });
+  } catch (error: any) {
+    console.error("Update job error:", error);
+    return NextResponse.json({ error: "Failed to update job" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser || sessionUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id, isActive } = await req.json();
+    if (!id || typeof isActive !== "boolean") {
+      return NextResponse.json({ error: "Missing id or isActive boolean" }, { status: 400 });
+    }
+
+    const job = await prisma.job.update({
+      where: { id },
+      data: { isActive },
+      include: { company: true }
+    });
+
+    return NextResponse.json({ success: true, job });
+  } catch (error: any) {
+    return NextResponse.json({ error: "Failed to toggle drive status" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request) {
   const sessionUser = await getSessionUser();
   if (!sessionUser || sessionUser.role !== "ADMIN") {

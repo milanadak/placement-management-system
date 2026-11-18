@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Users, Search, Download, FileText, CheckCircle2, XCircle, ArrowUpDown, ExternalLink, Loader2, Award, Phone, Mail, BookOpen } from "lucide-react";
+import { Users, Search, Download, FileText, CheckCircle2, XCircle, ArrowUpDown, ExternalLink, Loader2, Award, Phone, Mail, BookOpen, Edit2, Save } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export default function AdminStudentsPage() {
@@ -14,7 +15,19 @@ export default function AdminStudentsPage() {
   const [search, setSearch] = useState("");
   const [selectedDept, setSelectedDept] = useState("ALL");
   const [cgpaSortOrder, setCgpaSortOrder] = useState<"desc" | "asc">("desc");
+
+  // Modal and Edit states
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    department: "Computer Science",
+    graduationYear: 2026,
+    cgpa: 0,
+    phone: "",
+    skills: ""
+  });
 
   useEffect(() => {
     fetchStudents();
@@ -31,6 +44,48 @@ export default function AdminStudentsPage() {
       toast.error("Failed to load students list.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenDossier = (s: any) => {
+    setSelectedStudent(s);
+    setIsEditing(false);
+    setEditForm({
+      name: s.name,
+      department: s.studentProfile?.department || "Computer Science",
+      graduationYear: s.studentProfile?.graduationYear || 2026,
+      cgpa: s.studentProfile?.cgpa || 0,
+      phone: s.studentProfile?.phone || "",
+      skills: s.studentProfile?.skills || ""
+    });
+  };
+
+  const handleSaveStudentEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+
+    setSavingEdit(true);
+    try {
+      const res = await fetch("/api/admin/students", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedStudent.id,
+          ...editForm
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+
+      toast.success("Student academic record updated!");
+      setIsEditing(false);
+      setSelectedStudent(null);
+      fetchStudents();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update student.");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -64,7 +119,7 @@ export default function AdminStudentsPage() {
             Registered Student Records
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Manage academic profiles, resumes, and individual recruitment tracking.
+            Manage academic profiles, edit candidate details, inspect resumes, and track individual drives.
           </p>
         </div>
 
@@ -118,7 +173,7 @@ export default function AdminStudentsPage() {
 
         <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
           <span>Displaying {filteredStudents.length} of {students.length} registered students</span>
-          <span className="text-slate-400 text-[11px]">Click Review to inspect full candidate dossier</span>
+          <span className="text-slate-400 text-[11px]">Click Review Dossier to inspect or edit academic records</span>
         </div>
       </div>
 
@@ -187,7 +242,7 @@ export default function AdminStudentsPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setSelectedStudent(s)}
+                          onClick={() => handleOpenDossier(s)}
                           className="h-7 text-[11px] px-2.5 text-blue-600 hover:text-blue-700 border-blue-200"
                         >
                           Review Dossier
@@ -202,7 +257,7 @@ export default function AdminStudentsPage() {
         </Card>
       )}
 
-      {/* Student Dossier Modal */}
+      {/* Student Dossier & Edit Modal */}
       {selectedStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
@@ -218,109 +273,215 @@ export default function AdminStudentsPage() {
                   </p>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedStudent(null)}
-                className="h-8 w-8 p-0"
-              >
-                ✕
-              </Button>
-            </div>
-
-            {/* Academic details grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Department</span>
-                <span className="font-semibold text-slate-800">{selectedStudent.studentProfile?.department}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">CGPA</span>
-                <span className="font-bold text-emerald-600 text-sm">{selectedStudent.studentProfile?.cgpa?.toFixed(2)}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Batch Year</span>
-                <span className="font-semibold text-slate-800">{selectedStudent.studentProfile?.graduationYear}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] uppercase">Contact</span>
-                <span className="font-semibold text-slate-800">{selectedStudent.studentProfile?.phone || "N/A"}</span>
-              </div>
-            </div>
-
-            {/* Skills */}
-            <div>
-              <span className="text-xs font-semibold text-slate-700 block mb-1.5">Technical Skills</span>
-              <div className="flex flex-wrap gap-1.5">
-                {(selectedStudent.studentProfile?.skills || "").split(",").map((sk: string, idx: number) => (
-                  <span key={idx} className="px-2.5 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                    {sk.trim()}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Resume file link */}
-            {selectedStudent.studentProfile?.resumeUrl && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-900">
-                  <FileText className="h-4 w-4 text-emerald-600" />
-                  <span>Verified Resume: {selectedStudent.studentProfile.resumeName || "Resume.pdf"}</span>
-                </div>
-                <a
-                  href={selectedStudent.studentProfile.resumeUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="h-8 text-xs gap-1"
                 >
-                  <span>Download File</span>
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+                  <Edit2 className="h-3 w-3" />
+                  <span>{isEditing ? "View Mode" : "Edit Academic Details"}</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedStudent(null)}
+                  className="h-8 w-8 p-0"
+                >
+                  ✕
+                </Button>
+              </div>
+            </div>
+
+            {/* Editable Form vs Dossier View */}
+            {isEditing ? (
+              <form onSubmit={handleSaveStudentEdit} className="space-y-4 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="sname">Full Name *</Label>
+                    <Input
+                      id="sname"
+                      required
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="sphone">Contact Phone *</Label>
+                    <Input
+                      id="sphone"
+                      required
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="sdept">Department *</Label>
+                    <select
+                      id="sdept"
+                      value={editForm.department}
+                      onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                      className="w-full h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Computer Science">Computer Science</option>
+                      <option value="Information Technology">Information Technology</option>
+                      <option value="Data Science">Data Science</option>
+                      <option value="Electronics">Electronics</option>
+                      <option value="Electrical Engineering">Electrical Engineering</option>
+                      <option value="Mechanical Engineering">Mechanical Engineering</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="scgpa">CGPA (0 - 10) *</Label>
+                    <Input
+                      id="scgpa"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="10"
+                      required
+                      value={editForm.cgpa}
+                      onChange={(e) => setEditForm({ ...editForm, cgpa: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="syear">Graduation Batch *</Label>
+                    <Input
+                      id="syear"
+                      type="number"
+                      required
+                      value={editForm.graduationYear}
+                      onChange={(e) => setEditForm({ ...editForm, graduationYear: parseInt(e.target.value) || 2026 })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="sskills">Technical Skills (Comma separated) *</Label>
+                  <Input
+                    id="sskills"
+                    required
+                    value={editForm.skills}
+                    onChange={(e) => setEditForm({ ...editForm, skills: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditing(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={savingEdit}
+                    className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+                  >
+                    {savingEdit && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    <Save className="h-3.5 w-3.5" />
+                    <span>Save Student Changes</span>
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                {/* Academic details grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Department</span>
+                    <span className="font-semibold text-slate-800">{selectedStudent.studentProfile?.department}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">CGPA</span>
+                    <span className="font-bold text-emerald-600 text-sm">{selectedStudent.studentProfile?.cgpa?.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Batch Year</span>
+                    <span className="font-semibold text-slate-800">{selectedStudent.studentProfile?.graduationYear}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase">Contact</span>
+                    <span className="font-semibold text-slate-800">{selectedStudent.studentProfile?.phone || "N/A"}</span>
+                  </div>
+                </div>
+
+                {/* Skills */}
+                <div>
+                  <span className="text-xs font-semibold text-slate-700 block mb-1.5">Technical Skills</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(selectedStudent.studentProfile?.skills || "").split(",").map((sk: string, idx: number) => (
+                      <span key={idx} className="px-2.5 py-0.5 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                        {sk.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Resume file link */}
+                {selectedStudent.studentProfile?.resumeUrl && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-900">
+                      <FileText className="h-4 w-4 text-emerald-600" />
+                      <span>Verified Resume: {selectedStudent.studentProfile.resumeName || "Resume.pdf"}</span>
+                    </div>
+                    <a
+                      href={selectedStudent.studentProfile.resumeUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
+                    >
+                      <span>Download File</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
+
+                {/* Applications history */}
+                <div>
+                  <span className="text-xs font-semibold text-slate-700 block mb-2">
+                    Placement Drive Applications ({selectedStudent.applications.length})
+                  </span>
+                  <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto border border-slate-200 rounded-xl">
+                    {selectedStudent.applications.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400">No applications yet.</div>
+                    ) : (
+                      selectedStudent.applications.map((app: any) => (
+                        <div key={app.id} className="p-2.5 flex items-center justify-between text-xs">
+                          <div>
+                            <div className="font-semibold text-slate-900">{app.job.title}</div>
+                            <div className="text-[10px] text-slate-500">{app.job.company.name}</div>
+                          </div>
+                          <Badge
+                            variant={
+                              app.status === "Selected"
+                                ? "success"
+                                : app.status === "Interview Scheduled"
+                                ? "purple"
+                                : app.status === "Shortlisted"
+                                ? "info"
+                                : app.status === "Rejected"
+                                ? "destructive"
+                                : "secondary"
+                            }
+                            className="text-[10px]"
+                          >
+                            {app.status}
+                          </Badge>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
-
-            {/* Applications history */}
-            <div>
-              <span className="text-xs font-semibold text-slate-700 block mb-2">
-                Placement Drive Applications ({selectedStudent.applications.length})
-              </span>
-              <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto border border-slate-200 rounded-xl">
-                {selectedStudent.applications.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-slate-400">No applications yet.</div>
-                ) : (
-                  selectedStudent.applications.map((app: any) => (
-                    <div key={app.id} className="p-2.5 flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-semibold text-slate-900">{app.job.title}</div>
-                        <div className="text-[10px] text-slate-500">{app.job.company.name}</div>
-                      </div>
-                      <Badge
-                        variant={
-                          app.status === "Selected"
-                            ? "success"
-                            : app.status === "Interview Scheduled"
-                            ? "purple"
-                            : app.status === "Shortlisted"
-                            ? "info"
-                            : app.status === "Rejected"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                        className="text-[10px]"
-                      >
-                        {app.status}
-                      </Badge>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button size="sm" onClick={() => setSelectedStudent(null)} className="text-xs">
-                Close Dossier
-              </Button>
-            </div>
           </div>
         </div>
       )}
