@@ -18,18 +18,48 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fillDemoStudent = () => {
-    setEmail("aravind.sharma@campusconnect.edu");
-    setPassword("Student@12345");
-    setRole("STUDENT");
+  const quickLogin = async (demoEmail: string, demoPass: string, demoRole: "STUDENT" | "ADMIN") => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setRole(demoRole);
     setError(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: demoEmail, password: demoPass, role: demoRole }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Authentication failed. Please verify credentials.");
+      }
+
+      toast.success(`Welcome back, ${data.user.name}!`);
+
+      if (data.user.role === "ADMIN") {
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/student/dashboard");
+      }
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || "Failed to sign in.");
+      toast.error(err.message || "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fillDemoStudent = () => {
+    quickLogin("aravind.sharma@campusconnect.edu", "Student@12345", "STUDENT");
   };
 
   const fillDemoAdmin = () => {
-    setEmail("admin@campusconnect.edu");
-    setPassword("Admin@12345");
-    setRole("ADMIN");
-    setError(null);
+    quickLogin("admin@campusconnect.edu", "Admin@12345", "ADMIN");
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -41,7 +71,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email: email.trim(), password, role }),
       });
 
       const data = await res.json();
@@ -86,26 +116,36 @@ export default function LoginPage() {
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-blue-900 flex items-center gap-1.5">
               <ShieldCheck className="h-4 w-4 text-blue-600" />
-              Demo Quick Credentials
+              1-Click Instant Login
             </span>
-            <span className="text-[11px] text-blue-700 font-medium">Click to pre-fill</span>
+            <span className="text-[11px] text-blue-700 font-medium">Click to log in immediately</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
+              disabled={loading}
               onClick={fillDemoStudent}
-              className="text-left p-2 rounded-lg bg-white border border-blue-200 hover:border-blue-400 hover:shadow-xs transition text-xs"
+              className="text-left p-2.5 rounded-lg bg-white border border-blue-200 hover:border-blue-400 hover:shadow-xs transition text-xs cursor-pointer"
             >
-              <div className="font-semibold text-slate-900">Demo Student</div>
-              <div className="text-[10px] text-slate-500 truncate">aravind.sharma@...</div>
+              <div className="font-semibold text-slate-900 flex items-center justify-between">
+                <span>Demo Student</span>
+                <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded font-normal">Student</span>
+              </div>
+              <div className="text-[10px] text-slate-500 truncate mt-0.5">aravind.sharma@...</div>
+              <div className="text-[9px] text-blue-600 font-medium mt-1">⚡ Click to Login</div>
             </button>
             <button
               type="button"
+              disabled={loading}
               onClick={fillDemoAdmin}
-              className="text-left p-2 rounded-lg bg-white border border-blue-200 hover:border-blue-400 hover:shadow-xs transition text-xs"
+              className="text-left p-2.5 rounded-lg bg-white border border-blue-200 hover:border-blue-400 hover:shadow-xs transition text-xs cursor-pointer"
             >
-              <div className="font-semibold text-slate-900">Demo Administrator</div>
-              <div className="text-[10px] text-slate-500 truncate">admin@campusconnect...</div>
+              <div className="font-semibold text-slate-900 flex items-center justify-between">
+                <span>Demo Administrator</span>
+                <span className="text-[10px] bg-slate-900 text-white px-1 rounded font-normal">Admin</span>
+              </div>
+              <div className="text-[10px] text-slate-500 truncate mt-0.5">admin@campusconnect...</div>
+              <div className="text-[9px] text-emerald-600 font-medium mt-1">⚡ Click to Login</div>
             </button>
           </div>
         </div>
@@ -149,14 +189,16 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">College Email Address</Label>
+                <Label htmlFor="email">College Email or Username</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <Input
                     id="email"
-                    type="email"
+                    type="text"
                     required
-                    placeholder={role === "ADMIN" ? "admin@campusconnect.edu" : "student@campusconnect.edu"}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    placeholder={role === "ADMIN" ? "admin@campusconnect.edu or admin" : "student@campusconnect.edu"}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-9"
@@ -167,7 +209,7 @@ export default function LoginPage() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <span className="text-[11px] text-slate-400">Default: Admin@12345 / Student@12345</span>
+                  <span className="text-[11px] text-slate-500 font-mono">Admin@12345</span>
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
@@ -180,6 +222,9 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-9"
                   />
+                </div>
+                <div className="text-[10px] text-slate-400 pt-0.5">
+                  Admin login: <span className="text-slate-600 font-mono">admin@campusconnect.edu</span> / <span className="text-slate-600 font-mono">Admin@12345</span>
                 </div>
               </div>
 
