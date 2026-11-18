@@ -47,20 +47,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Student not found." }, { status: 404 });
     }
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "resumes");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const extension = path.extname(file.name) || ".pdf";
-    const sanitizedBaseName = student.name.replace(/[^a-zA-Z0-9]/g, "_");
-    const filename = `${sanitizedBaseName}_admin_upload_${Date.now()}${extension}`;
-    const filePath = path.join(uploadDir, filename);
-
     const buffer = Buffer.from(await file.arrayBuffer());
-    fs.writeFileSync(filePath, buffer);
+    let publicUrl = "";
 
-    const publicUrl = `/uploads/resumes/${filename}`;
+    // In local environments or persistent servers, write to disk
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "resumes");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const extension = path.extname(file.name) || ".pdf";
+      const sanitizedBaseName = student.name.replace(/[^a-zA-Z0-9]/g, "_");
+      const filename = `${sanitizedBaseName}_admin_upload_${Date.now()}${extension}`;
+      const filePath = path.join(uploadDir, filename);
+
+      fs.writeFileSync(filePath, buffer);
+      publicUrl = `/uploads/resumes/${filename}`;
+    } catch (fsErr) {
+      // In serverless / read-only filesystem environments (e.g. Vercel), store as persistent Data URI
+      console.warn("Local storage write failed (serverless environment). Storing as persistent Data URI.", fsErr);
+      const base64Data = buffer.toString("base64");
+      publicUrl = `data:${file.type};base64,${base64Data}`;
+    }
 
     const updatedProfile = await prisma.studentProfile.update({
       where: { userId: studentId },
