@@ -38,10 +38,11 @@ yarn-error.log*
 next-env.d.ts
 
 # SQLite db & local backups
-prisma/*.db
 prisma/*.db-journal
 backup/
+!prisma/dev.db
 
 # user file uploads
 public/uploads/
 !public/uploads/.gitkeep
+.env*
