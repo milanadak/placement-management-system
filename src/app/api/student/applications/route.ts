@@ -11,8 +11,23 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let user = await prisma.user.findUnique({
+    where: { id: sessionUser.id }
+  });
+
+  if (!user && sessionUser.email) {
+    user = await prisma.user.findUnique({
+      where: { email: sessionUser.email }
+    });
+  }
+
   const applications = await prisma.application.findMany({
-    where: { studentId: sessionUser.id },
+    where: {
+      OR: [
+        { studentId: sessionUser.id },
+        ...(user ? [{ studentId: user.id }] : [])
+      ]
+    },
     include: {
       job: {
         include: { company: true }
